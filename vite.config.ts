@@ -282,14 +282,9 @@ export default defineConfig(({ command, isPreview }) => ({
     target: "es2022",
     sourcemap: false,
     cssMinify: true,
-    minify: "esbuild",
     reportCompressedSize: false,
     modulePreload: { polyfill: false },
     assetsInlineLimit: 4096,
-  },
-  esbuild: {
-    legalComments: "none",
-    drop: command === "build" ? ["debugger"] : [],
   },
   plugins: [
     pgliteBootstrapPlugin(),
