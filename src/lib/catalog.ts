@@ -1,4 +1,5 @@
-import type { CatalogMod } from "./types.ts";
+import { filesForHit } from "./mod-kind.ts";
+import type { CatalogMod, SearchHit } from "./types.ts";
 import { matchesModQuery, parseModQuery } from "./mod-query.ts";
 
 /** Current Palworld dedicated / client line Palnest is built for. */
@@ -484,7 +485,7 @@ export function searchCatalog(query: string, source?: CatalogMod["source"]) {
   });
 }
 
-export function catalogToHit(mod: CatalogMod) {
+export function catalogToHit(mod: CatalogMod): SearchHit {
   return {
     id: mod.id,
     name: mod.name,
@@ -500,5 +501,12 @@ export function catalogToHit(mod: CatalogMod) {
     serverCompatible: mod.serverCompatible,
     gameVersions: mod.gameVersions,
     requires: mod.requires,
+    files: filesForHit({
+      name: mod.name,
+      kind: mod.kind === "framework" ? "palschema" : mod.kind,
+      files: undefined,
+      sizeKb: mod.sizeKb,
+      source: mod.source,
+    }),
   };
 }

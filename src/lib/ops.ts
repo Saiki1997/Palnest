@@ -187,17 +187,6 @@ export function findConflicts(mods: InstalledMod[]): ModConflict[] {
       }
     }
   }
-  for (const m of live) {
-    if (m.broken) {
-      out.push({
-        id: `${m.id}-broken`,
-        title: "Broken pack is enabled",
-        detail: `${m.name} is on but marked broken. Disable it or restore Scripts/main.lua.`,
-        a: m.id,
-        b: m.id,
-      });
-    }
-  }
   return out;
 }
 
@@ -336,12 +325,7 @@ export function modExtractDest(root: string, kind: string, linux = false) {
   return `${base}\\Pal\\Binaries\\${win}\\ue4ss\\Mods`;
 }
 
-export function guessZipKind(name: string): "pak" | "palschema" | "ue4ss" {
-  const n = name.toLowerCase();
-  if (n.includes("schema") || n.includes("palschema")) return "palschema";
-  if (n.includes("pak") || n.endsWith(".pak.zip")) return "pak";
-  return "ue4ss";
-}
+export { guessZipKind } from "./mod-kind.ts";
 
 export function kickPlayer(players: PlayerInfo[], playerId: string) {
   return players.filter((p) => p.playerId !== playerId);

@@ -1,4 +1,4 @@
-# Palnest — Palworld Server & Mod Manager 1.0.5
+# Palnest — Palworld Server & Mod Manager 1.0.6
 
 Desktop + web manager for Palworld dedicated servers: worlds, mods, SteamCMD, PortWarp / playit.gg tunnels, backups, REST admin, and Engine.ini performance tweaks.
 

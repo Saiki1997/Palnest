@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { instanceExe, overlayInstanceArgs, migrateFleet, nextSlot, portConflicts, portsForSlot, worldBusy } from "./fleet.ts";
+import { instanceExe, isStalePortClaim, overlayInstanceArgs, migrateFleet, nextSlot, portConflicts, portsForSlot, worldBusy } from "./fleet.ts";
 import { advanceTunnel, idleTunnel, joinHost, joinIp, tunnelLaunchFlags } from "./tunnels.ts";
 import type { LaunchArg, ServerState } from "./types.ts";
 
@@ -56,6 +56,13 @@ test("running worlds cannot share a UDP port", () => {
   assert.ok(clash);
   assert.equal(clash?.port, 8211);
   assert.equal(portConflicts(fleet, { id: "yard", ...portsForSlot(1) }, true), null);
+});
+
+test("stopped worlds do not hold a port — Palnest forces it", () => {
+  const fleet = [box({ id: "hollow", name: "Hollow", running: false, slot: 0 }), box({ id: "yard", name: "Yard", slot: 0 })];
+  assert.equal(portConflicts(fleet, { id: "yard", ...portsForSlot(0) }, true), null);
+  assert.equal(isStalePortClaim(box({ running: false })), true);
+  assert.equal(isStalePortClaim(box({ running: true, pid: 44, listenAt: new Date().toISOString() })), false);
 });
 
 test("the same world cannot boot twice", () => {

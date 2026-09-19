@@ -70,18 +70,17 @@ test("enable flags write enabled.txt and rename pak.off", () => {
   assert.equal(pakDiskName("Foo.pak.off", true), "Foo.pak");
 });
 
-test("conflict map catches same file, schema category, and broken enabled", () => {
+test("conflict map catches same file and PalSchema category overlap", () => {
   const mods = [
     mod({ id: "a", name: "One", installPath: "Paks/~mods/Map.pak", kind: "pak" }),
     mod({ id: "b", name: "Two", installPath: "Paks/~mods/Map.pak", kind: "pak" }),
     mod({ id: "c", name: "SchemaA", kind: "palschema", category: "Pals" }),
     mod({ id: "d", name: "SchemaB", kind: "palschema", category: "Pals" }),
-    mod({ id: "e", name: "Dead", kind: "ue4ss", broken: true, installPath: "Mods/Dead" }),
   ];
   const hits = findConflicts(mods);
   assert.ok(hits.some((h) => h.title.includes("Same pak")));
   assert.ok(hits.some((h) => h.title.includes("PalSchema")));
-  assert.ok(hits.some((h) => h.title.includes("Broken")));
+  assert.ok(!hits.some((h) => h.title.includes("Broken")));
 });
 
 test("profiles snapshot and restore enabled ids", () => {

@@ -1,10 +1,10 @@
 {
   "name": "app-builder-workspace",
   "private": true,
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "electron/main.mjs",
   "author": "Palnest",
-  "description": "Palworld Server & Mod Manager 1.0.5",
+  "description": "Palworld Server & Mod Manager 1.0.6",
   "sideEffects": false,
   "type": "module",
   "overrides": {
@@ -22,7 +22,7 @@
     "desktop": "electron electron/main.mjs",
     "desktop:pack": "node scripts/build-desktop.mjs",
     "check:auth": "node scripts/check-auth-invariant.mjs",
-    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/world-files.test.ts src/lib/monitor.test.ts src/lib/guide.test.ts src/lib/scan.test.ts src/lib/fleet.test.ts src/lib/ops.test.ts src/lib/listen.test.ts src/lib/checker.test.ts src/lib/mod-query.test.ts src/lib/steam-latest.test.ts src/lib/backup.test.ts src/lib/agents.test.ts src/lib/args.test.ts",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts src/lib/world-files.test.ts src/lib/monitor.test.ts src/lib/guide.test.ts src/lib/scan.test.ts src/lib/fleet.test.ts src/lib/ops.test.ts src/lib/listen.test.ts src/lib/checker.test.ts src/lib/mod-query.test.ts src/lib/steam-latest.test.ts src/lib/backup.test.ts src/lib/agents.test.ts src/lib/args.test.ts src/lib/mod-kind.test.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

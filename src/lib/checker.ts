@@ -53,7 +53,7 @@ export function runChecker(input: {
       severity: "error",
       kind: "conflict",
       title: hit.title,
-      detail: `${hit.detail} Palnest blocks start while this overlap is enabled.`,
+      detail: `${hit.detail} Palnest still lets PalServer start; overlapping files are the only hard stop.`,
       modId: hit.a,
       fixLabel: "Disable one",
       fixAction: "disable",
@@ -64,10 +64,12 @@ export function runChecker(input: {
     if (mod.broken || mod.fileCount <= 0) {
       findings.push({
         id: `broken-${mod.id}`,
-        severity: "error",
+        severity: "warn",
         kind: "broken",
-        title: `${mod.name} is missing files`,
-        detail: mod.notes || "Install folder is empty or the main script/pak was not found.",
+        title: `${mod.name} looks broken`,
+        detail:
+          mod.notes ||
+          "Install folder is empty or the main script/pak was not found. PalServer can still start. If it crashes, Palnest will name this pack.",
         modId: mod.id,
         fixLabel: "Disable",
         fixAction: "disable",
@@ -171,13 +173,5 @@ export function bootConflicts(
     mode: extra?.mode === "client" ? "server" : extra?.mode ?? "server",
     gameVersion: "1.0.5",
     frameworks: extra?.frameworks ?? DUMMY_FRAMEWORKS,
-  }).filter((f) => {
-    if (f.kind !== "conflict" && f.kind !== "broken" && f.kind !== "missing-dep") return false;
-    if (f.kind === "broken") {
-      const m = mods.find((x) => x.id === f.modId);
-      if (!m?.enabled) return false;
-      if (m.target === "client") return false;
-    }
-    return true;
-  });
+  }).filter((f) => f.kind === "conflict");
 }

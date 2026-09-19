@@ -52,6 +52,17 @@ export function portConflicts(
   return null;
 }
 
+export function isStalePortClaim(
+  inst: Pick<ServerState, "running" | "listenAt" | "pid" | "startedAt">,
+  now = Date.now(),
+) {
+  if (!inst.running) return true;
+  if (inst.listenAt || inst.pid) return false;
+  const started = inst.startedAt ? new Date(inst.startedAt).getTime() : 0;
+  if (!started) return true;
+  return now - started > 90_000;
+}
+
 export function worldBusy(instances: ServerState[], worldId: string, exceptId?: string) {
   if (!worldId) return undefined;
   return instances.find((i) => i.id !== exceptId && i.running && i.worldId === worldId);

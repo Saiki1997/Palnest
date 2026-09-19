@@ -6,6 +6,15 @@ export type ModSource = "nexus" | "steam" | "curseforge" | "github" | "local";
 
 export type InstallTarget = "client" | "server" | "both";
 
+export interface ModFileChoice {
+  id: string;
+  name: string;
+  sizeKb: number;
+  kind: ModKind;
+  note: string;
+  url?: string;
+}
+
 export type FindingSeverity = "error" | "warn" | "info";
 
 export type FindingKind =
@@ -251,6 +260,7 @@ export interface SearchHit {
   serverCompatible: boolean;
   gameVersions: string[];
   requires: string[];
+  files?: ModFileChoice[];
 }
 
 export type TunnelProvider = "none" | "playit" | "portwarp";

@@ -20,6 +20,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAppStore } from "@/lib/store";
 import { kindLabel, sourceLabel } from "@/lib/paths";
 import { findConflicts, guessZipKind, modExtractDest } from "@/lib/ops";
+import { guessKindFromListing, zipEntryNames } from "@/lib/mod-kind";
 import { extractModZip, steamcmdWorkshop } from "@/lib/runtime";
 import type { ScanFile, ScanResult } from "@/lib/scan";
 import type { InstallTarget, ModKind } from "@/lib/types";
@@ -170,16 +171,27 @@ function ModsPage() {
             hint="Palnest.exe writes the folder. This preview queues it in the world."
             onFile={(file) => {
               const destRoot = paths.server || paths.client;
-              const kind = guessZipKind(file.name);
-              const dest = destRoot ? modExtractDest(destRoot, kind) : "";
               const diskPath = (file as File & { path?: string }).path;
-              if (diskPath && dest) void extractModZip(diskPath, dest);
-              log({
-                level: "ok",
-                source: "mods",
-                message: `Extracted ${file.name} into ${dest || "the matching mod folder"}.`,
-              });
-              toast.success(`Queued ${file.name}`);
+              void (async () => {
+                let kind = guessZipKind(file.name);
+                try {
+                  if (file.size < 8_000_000) {
+                    const buf = new Uint8Array(await file.arrayBuffer());
+                    const listing = zipEntryNames(buf);
+                    if (listing.length) kind = guessKindFromListing(listing, file.name);
+                  }
+                } catch {
+                  /* filename fallback */
+                }
+                const dest = destRoot ? modExtractDest(destRoot, kind) : "";
+                if (diskPath && dest) void extractModZip(diskPath, dest);
+                log({
+                  level: "ok",
+                  source: "mods",
+                  message: `Extracted ${file.name} as ${kind} into ${dest || "the matching mod folder"}.`,
+                });
+                toast.success(`Queued ${file.name} as ${kind}`);
+              })();
             }}
           />
         </article>

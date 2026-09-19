@@ -15,6 +15,7 @@ import type {
   TunnelProvider,
   WorldSaveData,
   WorldSnapshot,
+  ModFileChoice,
 } from "./types";
 import type { WorldMeta } from "./sav";
 import { emptyState, freshConfigured, sampleState, SERVER_VERSIONS, type PalnestState } from "./seed";
@@ -34,7 +35,7 @@ import {
   settingOn,
   type MonitorThresholds,
 } from "./monitor";
-import { fleetOf, migrateFleet, nextSlot, normalizeInstance, patchInstance, portConflicts, portsForSlot, suggestedInstallPath, worldBusy } from "./fleet";
+import { fleetOf, isStalePortClaim, migrateFleet, nextSlot, normalizeInstance, patchInstance, portConflicts, portsForSlot, suggestedInstallPath, worldBusy } from "./fleet";
 import { advanceTunnel, type TunnelAction } from "./tunnels";
 import {
   applyProfile,
@@ -67,7 +68,7 @@ interface Actions {
   markCheckerRan: () => void;
   log: (entry: LogInput) => void;
   clearLogs: () => void;
-  installHit: (hit: SearchHit, target: InstallTarget) => void;
+  installHit: (hit: SearchHit, target: InstallTarget, file?: ModFileChoice) => void;
   toggleMod: (id: string) => void;
   uninstallMod: (id: string) => void;
   updateMod: (id: string) => void;
@@ -367,11 +368,16 @@ export const useAppStore = create<Store>()(
       markCheckerRan: () => set({ checkerRan: true }),
       log: (entry) => set((s) => ({ logs: pushLog(s.logs, entry) })),
       clearLogs: () => set({ logs: [] }),
-      installHit: (hit, target) => {
+      installHit: (hit, target, file) => {
         const catalog = CATALOG.find((c) => c.id === hit.id);
-        const kind = catalog?.kind === "framework" ? "palschema" : hit.kind;
+        const kind =
+          file?.kind && file.kind !== "framework"
+            ? file.kind
+            : catalog?.kind === "framework"
+              ? "palschema"
+              : hit.kind;
         const s = get();
-        if (s.mods.some((m) => m.name === hit.name && m.source === hit.source)) {
+        if (s.mods.some((m) => m.name === hit.name && m.source === hit.source && m.kind === kind)) {
           set((st) => ({
             logs: pushLog(st.logs, {
               level: "warn",
@@ -382,6 +388,8 @@ export const useAppStore = create<Store>()(
           return;
         }
         const order = s.mods.reduce((n, m) => Math.max(n, m.loadOrder), 0) + 10;
+        const destNote =
+          kind === "pak" ? "Paks/~mods" : kind === "palschema" ? "PalSchema/mods" : "ue4ss/Mods";
         const mod: InstalledMod = {
           id: nid("mod"),
           catalogId: catalog?.id,
@@ -401,9 +409,9 @@ export const useAppStore = create<Store>()(
           clientCompatible: catalog?.clientCompatible ?? true,
           description: hit.description,
           category: catalog?.category ?? "Installed",
-          installPath: modInstallPath(kind, hit.name, target, s.paths),
+          installPath: modInstallPath(kind, file?.name || hit.name, target, s.paths),
           fileCount: 3,
-          sizeKb: catalog?.sizeKb ?? 128,
+          sizeKb: file?.sizeKb ?? catalog?.sizeKb ?? 128,
           installedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -412,7 +420,7 @@ export const useAppStore = create<Store>()(
           logs: pushLog(st.logs, {
             level: "ok",
             source: hit.source,
-            message: `Installed ${hit.name} ${hit.version} → ${target}.`,
+            message: `Installed ${file?.name || hit.name} as ${kind} → ${target} (${destNote}).`,
           }),
         }));
       },
@@ -530,11 +538,23 @@ export const useAppStore = create<Store>()(
         }
         const clash = portConflicts(fleet, inst, true);
         if (clash) {
-          const message = `UDP ${clash.port} (${clash.label}) is already used by ${clash.otherName}.`;
-          set((st) => ({
-            logs: pushLog(st.logs, { level: "error", source: "fleet", message }),
-          }));
-          return message;
+          const other = fleet.find((i) => i.id === clash.otherId);
+          if (other && isStalePortClaim(other)) {
+            get().stopServer(other.id);
+            set((st) => ({
+              logs: pushLog(st.logs, {
+                level: "warn",
+                source: "fleet",
+                message: `UDP ${clash.port} was still assigned to ${clash.otherName}, but nothing is bound. Forcing it for ${inst.name}.`,
+              }),
+            }));
+          } else {
+            const message = `UDP ${clash.port} (${clash.label}) is already used by ${clash.otherName}.`;
+            set((st) => ({
+              logs: pushLog(st.logs, { level: "error", source: "fleet", message }),
+            }));
+            return message;
+          }
         }
         if (inst.worldId) {
           const busy = worldBusy(fleet, inst.worldId, inst.id);
@@ -756,9 +776,9 @@ export const useAppStore = create<Store>()(
           }
           const slot = nextSlot(fleet.instances);
           const ports = portsForSlot(slot);
-          const clash = portConflicts(fleet.instances, { id: "new", ...ports }, false);
+          const clash = portConflicts(fleet.instances, { id: "new", ...ports }, true);
           if (clash) {
-            created.error = `Port ${clash.port} collides with ${clash.otherName}.`;
+            created.error = `Port ${clash.port} is in use by ${clash.otherName}. Pick another port or stop that world.`;
             return s;
           }
           let worlds = s.worlds;
@@ -878,9 +898,9 @@ export const useAppStore = create<Store>()(
           restPort: patch.restPort ?? inst.restPort,
           rconPort: patch.rconPort ?? inst.rconPort,
         };
-        const clash = portConflicts(fleet, { id, ...nextPorts }, false);
+        const clash = portConflicts(fleet, { id, ...nextPorts }, true);
         if (clash && (patch.port || patch.queryPort || patch.restPort || patch.rconPort)) {
-          return `Port ${clash.port} collides with ${clash.otherName}.`;
+          return `Port ${clash.port} is in use by ${clash.otherName}. Stop that world first, or Palnest will force the port when nothing is bound.`;
         }
         set((st) => {
           const next = patchInstance(st, id, patch);

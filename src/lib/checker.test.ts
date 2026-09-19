@@ -48,8 +48,10 @@ test("checker ignores game version pins and flags overlapping paks as start conf
   assert.equal(blockers.length >= 1, true);
 });
 
-test("bootConflicts includes broken enabled packs", () => {
+test("bootConflicts ignores broken packs so PalServer can still start", () => {
   const mods = [mod({ id: "dead", name: "Dead", kind: "ue4ss", broken: true, fileCount: 0, installPath: "Mods/Dead" })];
   const blockers = bootConflicts(mods, { frameworks: fw });
-  assert.ok(blockers.some((f) => f.kind === "broken" || f.kind === "conflict"));
+  assert.equal(blockers.length, 0);
+  const findings = runChecker({ mods, mode: "server", gameVersion: "1.0.5", frameworks: fw });
+  assert.ok(findings.some((f) => f.kind === "broken" && f.severity === "warn"));
 });

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { ModDetailDialog } from "@/components/mod-detail-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,7 @@ function DiscoverPage() {
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [workshopId, setWorkshopId] = useState("");
+  const [open, setOpen] = useState<SearchHit | null>(null);
   const paths = useAppStore((s) => s.paths);
   const log = useAppStore((s) => s.log);
 
@@ -71,7 +73,7 @@ function DiscoverPage() {
     <div>
       <PageHeader
         title="Discover"
-        description="Add and update mods from Nexus, Steam Workshop, and CurseForge. Keys live only in this browser."
+        description="Click a mod for its store page and a Files tab. Palnest routes PAK vs UE4SS Lua vs PalSchema from the archive you pick."
       />
 
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
@@ -137,7 +139,19 @@ function DiscoverPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {hits.map((hit) => (
-          <article key={hit.id} className="flex flex-col rounded-xl border border-border bg-card p-4">
+          <article
+            key={hit.id}
+            className="flex cursor-pointer flex-col rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40"
+            onClick={() => setOpen(hit)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setOpen(hit);
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
             <div className="mb-2 flex items-start justify-between gap-2">
               <h2 className="font-medium tracking-tight">{hit.name}</h2>
               <Badge variant="outline">{sourceLabel(hit.source)}</Badge>
@@ -151,23 +165,30 @@ function DiscoverPage() {
               {!hit.serverCompatible ? <span>Client only</span> : null}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => add(hit, defaultTarget)}>
-                Add to {defaultTarget}
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(hit);
+                }}
+              >
+                Open
               </Button>
-              {mode === "both" ? (
-                <>
-                  <Button size="sm" variant="outline" onClick={() => add(hit, "client")}>
-                    Client
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => add(hit, "server")}>
-                    Server
-                  </Button>
-                </>
-              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  add(hit, defaultTarget);
+                }}
+              >
+                Quick add
+              </Button>
             </div>
           </article>
         ))}
       </div>
+      <ModDetailDialog hit={open} open={Boolean(open)} onOpenChange={(v) => !v && setOpen(null)} defaultTarget={defaultTarget} />
     </div>
   );
 }

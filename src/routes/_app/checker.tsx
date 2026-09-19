@@ -38,7 +38,7 @@ function CheckerPage() {
     <div>
       <PageHeader
         title="Mod checker"
-        description="Conflict gate for PalServer start. Palworld mods rarely list a compatible game version, so Palnest looks for overlapping files, broken packs, and missing UE4SS or PalSchema — not version pins."
+        description="Conflict gate for PalServer start. Broken or empty packs are warnings — they do not block boot. If PalServer crashes, Palnest names the likely Lua/PAK pack from the console. Overlapping files are the only hard stop."
         actions={
           <Button
             variant="outline"
@@ -57,7 +57,7 @@ function CheckerPage() {
       />
 
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
-        <Score label="Conflicts / broken" value={errors.length} tone="danger" />
+        <Score label="Overlaps" value={errors.length} tone="danger" />
         <Score label="Server-side risks" value={warns.length} tone="warn" />
         <Score label="Notes" value={infos.length} tone="ok" />
       </div>

@@ -14,6 +14,7 @@ import {
   simulatedListenProbe,
 } from "@/lib/listen";
 import { overlayHost } from "@/lib/monitor";
+import { blameCrash } from "@/lib/crash-blame";
 import {
   enableModOnDisk,
   mapUpnp,
@@ -432,9 +433,22 @@ export function RuntimeBridge() {
             if (crashWatchdog && !m.running) {
               restarting.current.add(inst.id);
               pushConsole(inst.id, crashLine(), "err");
-              log({ level: "error", source: "watchdog", message: `${inst.name} crashed. Watchdog is restarting it.` });
+              const snap = useAppStore.getState();
+              const blame = blameCrash(snap.mods, snap.consoleLines?.[inst.id] ?? []);
+              if (blame) {
+                const culprit = snap.mods.find((mod) => mod.id === blame.modId);
+                if (culprit?.enabled) useAppStore.getState().toggleMod(blame.modId);
+                log({
+                  level: "error",
+                  source: "watchdog",
+                  message: `${inst.name} crashed. Likely cause: ${blame.name}. Disabled it and restarting. ${blame.evidence}`,
+                });
+                pushConsole(inst.id, `[PALNEST] Crash blamed on ${blame.name}. Pack disabled for the next boot.`, "err");
+              } else {
+                log({ level: "error", source: "watchdog", message: `${inst.name} crashed. Watchdog is restarting it.` });
+              }
               const hook = useAppStore.getState().ops?.webhook;
-              if (hook) void postWebhook(hook, webhookPayload("crash", `${inst.name} crashed and is restarting.`));
+              if (hook) void postWebhook(hook, webhookPayload("crash", `${inst.name} crashed${blame ? ` (blamed ${blame.name})` : ""} and is restarting.`));
               stopServer(inst.id);
               window.setTimeout(() => {
                 startServer(inst.id);

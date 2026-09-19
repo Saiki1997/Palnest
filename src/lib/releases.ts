@@ -1,7 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { CATALOG, searchCatalog, catalogToHit } from "./catalog.ts";
 import { parseModQuery } from "./mod-query.ts";
-import type { ModSource, RemoteRelease, SearchHit } from "./types";
+import { fileKindFromName, filesForHit } from "./mod-kind.ts";
+import type { ModFileChoice, ModSource, RemoteRelease, SearchHit } from "./types";
 
 type GhRelease = {
   tag_name: string;
@@ -304,4 +305,91 @@ export const searchMods = createServerFn({ method: "POST" })
           ? "Add a Steam Web API key to query Workshop live."
           : "Add a CurseForge API key, or browse the Palnest index.",
     };
+  });
+
+export const fetchModFiles = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      source: ModSource;
+      sourceId: string;
+      name: string;
+      kind: SearchHit["kind"];
+      nexusKey?: string;
+      curseforgeKey?: string;
+    }) => data,
+  )
+  .handler(async ({ data }): Promise<{ files: ModFileChoice[]; live: boolean; note?: string }> => {
+    const fallback = filesForHit({
+      name: data.name,
+      kind: data.kind,
+      files: undefined,
+      sizeKb: 256,
+      source: data.source,
+    });
+    if (data.source === "nexus" && data.nexusKey && data.sourceId) {
+      try {
+        const res = await fetch(`https://api.nexusmods.com/v1/games/palworld/mods/${data.sourceId}/files.json`, {
+          headers: { apikey: data.nexusKey, Accept: "application/json" },
+        });
+        if (res.ok) {
+          const json = (await res.json()) as {
+            files?: Array<{ file_id: number; file_name: string; size?: number; file_size?: number; description?: string }>;
+          };
+          const files = (json.files ?? []).map((f) => {
+            const kind = fileKindFromName(f.file_name);
+            return {
+              id: String(f.file_id),
+              name: f.file_name,
+              sizeKb: Math.max(1, Math.round((f.size || f.file_size || 0) / 1024)),
+              kind,
+              note: f.description?.slice(0, 120) || `${kind} from Nexus`,
+            } satisfies ModFileChoice;
+          });
+          if (files.length) return { files, live: true, note: "Nexus file list." };
+        }
+      } catch {
+        /* fallback */
+      }
+    }
+    if (data.source === "curseforge" && data.curseforgeKey && data.sourceId) {
+      try {
+        const res = await fetch(`https://api.curseforge.com/v1/mods/${data.sourceId}/files`, {
+          headers: { Accept: "application/json", "x-api-key": data.curseforgeKey },
+        });
+        if (res.ok) {
+          const json = (await res.json()) as {
+            data?: Array<{ id: number; fileName: string; fileLength?: number; displayName?: string }>;
+          };
+          const files = (json.data ?? []).map((f) => {
+            const kind = fileKindFromName(f.fileName);
+            return {
+              id: String(f.id),
+              name: f.fileName,
+              sizeKb: Math.max(1, Math.round((f.fileLength || 0) / 1024)),
+              kind,
+              note: f.displayName || `${kind} from CurseForge`,
+            } satisfies ModFileChoice;
+          });
+          if (files.length) return { files, live: true, note: "CurseForge file list." };
+        }
+      } catch {
+        /* fallback */
+      }
+    }
+    if (data.source === "steam") {
+      return {
+        files: [
+          {
+            id: data.sourceId || "workshop",
+            name: `${data.name.replace(/[^\w.-]+/g, "_") || "workshop"}.zip`,
+            sizeKb: 512,
+            kind: fileKindFromName(data.name) === "pak" ? "pak" : data.kind === "pak" ? "pak" : "ue4ss",
+            note: "Steam Workshop item — Palnest inspects PAK vs Lua after SteamCMD pulls it.",
+          },
+        ],
+        live: false,
+        note: "Workshop items are a single archive. Kind is confirmed on extract.",
+      };
+    }
+    return { files: fallback, live: false, note: "Index files. Palnest routes PAK vs UE4SS from the file name." };
   });
