@@ -8,6 +8,7 @@
         <p class="lede">Start PalServer.exe from the world folder so PortWarp and playit.gg can attach. Console stays in Palnest.</p>
     </div>
     <div class="actions">
+        <button class="btn" type="button" @onclick="() => showImport = true">Import existing server</button>
         <button class="btn btn-primary" type="button" @onclick="() => showCreate = true">Create new server</button>
         @if (Store.Active?.Running == true)
         {
@@ -22,11 +23,18 @@
 
 @if (Store.Active is { } inst)
 {
-    <div class="grid two">
+    <div class="grid stats" style="margin-bottom: 16px;">
+        <div class="card stat"><div class="label">UDP</div><div class="value">@inst.Port</div></div>
+        <div class="card stat"><div class="label">Query</div><div class="value">@inst.QueryPort</div></div>
+        <div class="card stat"><div class="label">REST</div><div class="value">@inst.RestPort</div></div>
+        <div class="card stat"><div class="label">Version</div><div class="value" style="font-size: 1.2rem;">@inst.Version</div></div>
+    </div>
+
+    <div class="grid two" style="margin-bottom: 16px;">
         <div class="card stack">
             <h2>@inst.Name</h2>
-            <p class="muted">@Fleet.ExePath(inst, @"C:\PalServers\PalServer")</p>
-            <p class="mono">UDP @inst.Port · query @inst.QueryPort · REST @inst.RestPort · RCON @inst.RconPort</p>
+            <p class="muted">@Fleet.ExePath(inst, Store.ServerPath)</p>
+            <p class="mono" style="font-size: 0.78rem; word-break: break-all;">@Store.CommandLine(inst)</p>
             <div class="console">
                 @foreach (var line in inst.Console.TakeLast(40))
                 {
@@ -57,7 +65,7 @@
                             <td class="mono">@p.Level</td>
                             <td class="row">
                                 <button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button>
-                                <button class="btn btn-ghost btn-danger" type="button" @onclick="() => Ban(p.Id)">Ban</button>
+                                <button class="btn btn-ghost btn-danger" type="button" @onclick="() => BanPlayer(p.Id)">Ban</button>
                             </td>
                         </tr>
                     }
@@ -65,6 +73,59 @@
                 </table>
             }
         </div>
+    </div>
+
+    <div class="card stack" style="margin-bottom: 16px;">
+        <div class="row" style="justify-content: space-between;">
+            <div>
+                <h2>SteamCMD latest</h2>
+                <p class="muted">Check api.steamcmd.net for Palworld dedicated 2394010 after 1.0.5.</p>
+            </div>
+            <button class="btn" type="button" @onclick="Store.CheckSteamLatest">Check for updates</button>
+        </div>
+        @if (Store.SteamLatest is { } latest)
+        {
+            <p>@(latest.Newer ? "Update available" : "Up to date") <span class="muted">@latest.Note</span></p>
+        }
+        else
+        {
+            <p class="muted">This world is on Palworld dedicated @inst.Version.</p>
+        }
+        <div class="row">
+            <button class="btn" type="button" @onclick='() => Store.UpdateServer("1.0.5")'>Reinstall 1.0.5</button>
+            <button class="btn" type="button" @onclick="Store.RollbackServer">Rollback to previous</button>
+        </div>
+    </div>
+
+    <div class="card stack">
+        <h2>Backup and restart</h2>
+        <label class="row"><input type="checkbox" @bind="Store.AutoBackup" /> Automatic backups</label>
+        <label class="row"><input type="checkbox" @bind="Store.RestartOn" /> Scheduled restart</label>
+        <div class="grid two">
+            <div class="field">
+                <label>Backup interval</label>
+                <select @bind="Store.BackupMinutes">
+                    <option value="10">Every 10 minutes</option>
+                    <option value="60">Every hour</option>
+                    <option value="360">Every 6 hours</option>
+                    <option value="720">Every 12 hours</option>
+                    <option value="1440">Every day</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Restart every</label>
+                <select @bind="Store.RestartHours">
+                    <option value="6">6 hours</option>
+                    <option value="12">12 hours</option>
+                    <option value="24">1 day</option>
+                </select>
+            </div>
+        </div>
+        <div class="field">
+            <label>Backup folder</label>
+            <input class="input" @bind="Store.BackupPath" />
+        </div>
+        <button class="btn" type="button" @onclick="Store.BackupNow">Backup now</button>
     </div>
 }
 
@@ -83,15 +144,34 @@
         </div>
     </div>
 }
+@if (showImport)
+{
+    <div class="modal-back" @onclick="() => showImport = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h2>Import existing server</h2>
+            <div class="stack">
+                <div class="field"><label>Name</label><input class="input" @bind="importName" /></div>
+                <div class="field"><label>Folder</label><input class="input" @bind="importPath" /></div>
+                <div class="row">
+                    <button class="btn btn-primary" type="button" @onclick="Import">Import</button>
+                    <button class="btn" type="button" @onclick="() => showImport = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
-    bool showCreate;
+    bool showCreate, showImport;
     string name = "";
+    string importName = "";
+    string importPath = @"C:\PalServers\PalServer";
     string? error;
     protected override void OnInitialized() => Store.Changed += OnChanged;
     void OnChanged() => InvokeAsync(StateHasChanged);
     public void Dispose() => Store.Changed -= OnChanged;
     void Start() => error = Store.StartServer();
+    void BanPlayer(string id) => Store.Ban(id, "Banned from server");
     void Create() { error = Store.CreateServer(name); if (error is null) showCreate = false; }
-    void Ban(string id) => Store.Ban(id, "Banned from server");
+    void Import() { error = Store.ImportServer(importPath, importName); if (error is null) showImport = false; }
 }

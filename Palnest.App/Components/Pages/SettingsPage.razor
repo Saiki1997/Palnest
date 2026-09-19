@@ -5,24 +5,94 @@
 <div class="top">
     <div>
         <h1>Settings</h1>
-        <p class="lede">Palnest 2.0 is a C# process. Background sampling only runs while a world is live.</p>
+        <p class="lede">Mode, paths, store keys, backups, and host behaviour.</p>
     </div>
 </div>
 
-<div class="card stack">
-    <label class="row">
-        <input type="checkbox" @bind="Store.AutoBackup" />
-        Automatic backups
-    </label>
-    <label class="row">
-        <input type="checkbox" @bind="Store.CrashWatchdog" />
-        Crash watchdog (name the pack, then restart)
-    </label>
-    <p class="muted">Edition @PalnestStore.Edition @PalnestStore.Version</p>
-</div>
+<section class="card stack" style="margin-bottom: 16px;">
+    <h2>Mode</h2>
+    <p class="muted">Server only, Client only, and Server + client.</p>
+    <div class="mode-grid">
+        <button type="button" class="mode-card @(Store.Mode == AppMode.Server ? "selected" : null)" @onclick="ServerOnly">
+            <strong>Server only</strong>
+            <span>Hide the game client. Palworld.exe is optional. PalServer stays.</span>
+        </button>
+        <button type="button" class="mode-card @(Store.Mode == AppMode.Client ? "selected" : null)" @onclick="ClientOnly">
+            <strong>Client only</strong>
+            <span>Hide dedicated controls. No PalServer required.</span>
+        </button>
+        <button type="button" class="mode-card @(Store.Mode == AppMode.Both ? "selected" : null)" @onclick="Both">
+            <strong>Server + client</strong>
+            <span>Dedicated worlds and the Palworld game together.</span>
+        </button>
+    </div>
+</section>
+
+<section class="card stack" style="margin-bottom: 16px;">
+    <h2>Paths</h2>
+    <div class="field"><label>Palworld game</label><input class="input" @bind="Store.ClientPath" /></div>
+    <div class="field"><label>Dedicated server</label><input class="input" @bind="Store.ServerPath" /></div>
+    <div class="field"><label>SteamCMD folder</label><input class="input" @bind="Store.SteamCmdPath" /></div>
+</section>
+
+<section class="card stack" style="margin-bottom: 16px;">
+    <h2>Store APIs</h2>
+    <p class="muted">Leave blank to browse the Palnest index.</p>
+    <div class="field"><label>Nexus API key</label><input class="input" type="password" autocomplete="off" @bind="Store.NexusKey" /></div>
+    <div class="field"><label>Steam Web API key</label><input class="input" type="password" autocomplete="off" @bind="Store.SteamKey" /></div>
+    <div class="field"><label>CurseForge API key</label><input class="input" type="password" autocomplete="off" @bind="Store.CurseforgeKey" /></div>
+</section>
+
+<section class="card stack" style="margin-bottom: 16px;">
+    <h2>Behaviour</h2>
+    <label class="row"><input type="checkbox" @bind="Store.AutoBackup" /> Automatic world snapshots</label>
+    <label class="row"><input type="checkbox" @bind="Store.CrashWatchdog" /> Crash watchdog</label>
+    <label class="row"><input type="checkbox" @bind="Store.CaptureConsole" /> Capture server console</label>
+    <label class="row"><input type="checkbox" @bind="Store.CheckModUpdates" /> Check mod updates</label>
+    <label class="row"><input type="checkbox" @bind="Store.RestartOn" /> Scheduled restart</label>
+    <div class="grid two">
+        <div class="field">
+            <label>Backup interval</label>
+            <select @bind="Store.BackupMinutes">
+                <option value="10">Every 10 minutes</option>
+                <option value="60">Every hour</option>
+                <option value="360">Every 6 hours</option>
+                <option value="720">Every 12 hours</option>
+                <option value="1440">Every day</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Backup folder</label>
+            <input class="input" @bind="Store.BackupPath" />
+        </div>
+    </div>
+</section>
+
+@if (Store.ShowServer)
+{
+    <section class="card stack" style="margin-bottom: 16px;">
+        <h2>Monitor thresholds</h2>
+        <div class="grid two">
+            <div class="field"><label>Sustained CPU %</label><input class="input" type="number" @bind="Store.CpuThreshold" /></div>
+            <div class="field"><label>Host RAM %</label><input class="input" type="number" @bind="Store.RamThreshold" /></div>
+            <div class="field"><label>Disk used %</label><input class="input" type="number" @bind="Store.DiskThreshold" /></div>
+            <div class="field"><label>Min sim FPS</label><input class="input" type="number" @bind="Store.FpsThreshold" /></div>
+        </div>
+    </section>
+}
+
+<section class="card stack">
+    <h2>Host</h2>
+    <label class="row"><input type="checkbox" @bind="Store.Autostart" /> Start with Windows</label>
+    <label class="row"><input type="checkbox" @bind="Store.Tray" /> Close to tray</label>
+    <p class="muted">Edition @PalnestStore.Edition @PalnestStore.Version · @Store.ModeLabel</p>
+</section>
 
 @code {
     protected override void OnInitialized() => Store.Changed += OnChanged;
     void OnChanged() => InvokeAsync(StateHasChanged);
     public void Dispose() => Store.Changed -= OnChanged;
+    void ServerOnly() => Store.SetMode(AppMode.Server);
+    void ClientOnly() => Store.SetMode(AppMode.Client);
+    void Both() => Store.SetMode(AppMode.Both);
 }

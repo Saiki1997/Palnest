@@ -5,7 +5,7 @@
 <div class="app">
     <nav class="nav">
         <div class="brand">
-            <div class="mark" aria-hidden="true"></div>
+            <img class="logo" src="/logo.svg" width="36" height="36" alt="Palnest" />
             <div>
                 <strong>Palnest</strong>
                 <span>v@(PalnestStore.Version)</span>
@@ -13,17 +13,23 @@
         </div>
         <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
         <div class="nav-section">World</div>
-        <NavLink href="/server">Server</NavLink>
-        <NavLink href="/worlds">Worlds</NavLink>
+        @if (Store.ShowServer)
+        {
+            <NavLink href="/server">Server</NavLink>
+            <NavLink href="/worlds">Worlds</NavLink>
+            <NavLink href="/monitor">Monitor</NavLink>
+            <NavLink href="/tunnels">Tunnels</NavLink>
+        }
         <NavLink href="/optimize">Optimize</NavLink>
         <div class="nav-section">Mods</div>
         <NavLink href="/mods">Installed</NavLink>
         <NavLink href="/discover">Discover</NavLink>
+        <NavLink href="/frameworks">Frameworks</NavLink>
         <NavLink href="/checker">Checker</NavLink>
         <div class="nav-section">Ops</div>
         <NavLink href="/logs">Logs</NavLink>
         <NavLink href="/settings">Settings</NavLink>
-        <p class="nav-foot">@Store.RunningCount live · idle ticker 10s</p>
+        <p class="nav-foot">@Store.ModeLabel · @Store.RunningCount live</p>
     </nav>
     <main class="main">
         @Body

@@ -19,27 +19,80 @@
                 <h2>@hit.Name</h2>
                 <span class="badge">@hit.Source</span>
             </div>
-            <p class="muted" style="font-size: 0.85rem;">@hit.Author · @hit.Kind</p>
+            <p class="muted" style="font-size: 0.85rem;">@hit.Author · @hit.Kind · @hit.Downloads.ToString("N0") dl</p>
             <p class="muted" style="font-size: 0.9rem;">@hit.Description</p>
             <div class="row">
-                <button class="btn btn-primary" type="button" @onclick="() => Store.InstallCatalog(hit)">Install @hit.Kind</button>
-                <a class="btn btn-ghost" href="@hit.Url" target="_blank" rel="noreferrer">Open page</a>
+                <button class="btn btn-primary" type="button" @onclick="() => Open(hit)">Open page</button>
             </div>
         </article>
     }
 </div>
 
+@if (open is { } mod)
+{
+    <div class="modal-back" @onclick="Close">
+        <div class="modal wide" @onclick:stopPropagation="true">
+            <div class="row" style="justify-content: space-between;">
+                <h2>@mod.Name</h2>
+                <button class="btn btn-ghost" type="button" @onclick="Close">Close</button>
+            </div>
+            <p class="muted" style="margin: 8px 0;">@mod.Author · @mod.Source @mod.SourceId · @mod.Kind</p>
+            <div class="tabs">
+                <button type="button" class="tab @(tab == "page" ? "active" : null)" @onclick='() => tab = "page"'>Page</button>
+                <button type="button" class="tab @(tab == "files" ? "active" : null)" @onclick='() => tab = "files"'>Files</button>
+            </div>
+            @if (tab == "page")
+            {
+                <p>@mod.Description</p>
+                <p class="muted" style="margin-top: 8px;">@mod.Url</p>
+                <p class="muted">Palnest routes PAK to ~mods and Lua to ue4ss/Mods.</p>
+            }
+            else
+            {
+                @if (mod.Files.Count == 0)
+                {
+                    <p class="muted">No files listed. Install the whole pack as @mod.Kind.</p>
+                    <button class="btn btn-primary" type="button" @onclick="() => Install(mod, null)">Install @mod.Kind</button>
+                }
+                else
+                {
+                    <table class="table">
+                        <thead><tr><th>File</th><th>Kind</th><th>Size</th><th></th></tr></thead>
+                        <tbody>
+                        @foreach (var f in mod.Files)
+                        {
+                            <tr>
+                                <td class="mono">@f.Name</td>
+                                <td><span class="badge">@f.Kind</span></td>
+                                <td>@f.Size</td>
+                                <td><button class="btn btn-primary" type="button" @onclick="() => Install(mod, f)">Install</button></td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            }
+        </div>
+    </div>
+}
+
 @code {
     string query = "";
+    string tab = "page";
+    CatalogMod? open;
     IEnumerable<CatalogMod> Hits =>
         Mods.Catalog.Where(m =>
             string.IsNullOrWhiteSpace(query) ||
             m.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             m.SourceId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             m.Url.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-            m.Id.Contains(query, StringComparison.OrdinalIgnoreCase));
+            m.Id.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            m.Author.Contains(query, StringComparison.OrdinalIgnoreCase));
 
     protected override void OnInitialized() => Store.Changed += OnChanged;
     void OnChanged() => InvokeAsync(StateHasChanged);
     public void Dispose() => Store.Changed -= OnChanged;
+    void Open(CatalogMod hit) { open = hit; tab = "page"; }
+    void Close() => open = null;
+    void Install(CatalogMod hit, CatalogFile? file) { Store.InstallCatalog(hit, file); open = null; }
 }

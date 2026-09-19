@@ -57,4 +57,31 @@ public class ModsTests
         Assert.Null(store.StartServer(store.Servers.First(s => s.Name == "Yard").Id));
         Assert.Equal(1, store.RunningCount);
     }
+
+    [Fact]
+    public void ModeHidesDedicatedWhenClientOnly()
+    {
+        var store = new PalnestStore();
+        Assert.True(store.ShowServer);
+        store.SetMode(AppMode.Client);
+        Assert.False(store.ShowServer);
+        Assert.True(store.ShowClient);
+        Assert.Equal("Client only", store.ModeLabel);
+        store.SetMode(AppMode.Server);
+        Assert.True(store.ShowServer);
+        Assert.False(store.ShowClient);
+    }
+
+    [Fact]
+    public void StartAllAndSteamCheck()
+    {
+        var store = new PalnestStore();
+        var r = store.StartAll();
+        Assert.True(r.Started >= 1);
+        store.CheckSteamLatest();
+        Assert.NotNull(store.SteamLatest);
+        Assert.False(store.SteamLatest!.Newer);
+        store.SetBackupMinutes(10);
+        Assert.Equal(10, store.BackupMinutes);
+    }
 }

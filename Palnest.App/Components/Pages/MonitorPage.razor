@@ -1,0 +1,73 @@
+@page "/monitor"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Monitor</h1>
+        <p class="lede">Host vs PalServer resources. Thresholds live in Settings. Sampling sleeps when nothing is live.</p>
+    </div>
+    <div class="actions">
+        @if (Store.Active?.Running == true)
+        {
+            <button class="btn" type="button" @onclick="() => Store.StopServer()">Stop</button>
+        }
+        else
+        {
+            <button class="btn btn-primary" type="button" @onclick="Start">Start</button>
+        }
+    </div>
+</div>
+
+<div class="grid stats" style="margin-bottom: 16px;">
+    <div class="card stat"><div class="label">CPU</div><div class="value">@(Latest?.Cpu.ToString("0") ?? "—")%</div></div>
+    <div class="card stat"><div class="label">RAM</div><div class="value">@(Latest?.RamGb.ToString("0.0") ?? "—") GB</div></div>
+    <div class="card stat"><div class="label">Disk</div><div class="value">@(Latest?.DiskPct.ToString("0") ?? "41")%</div></div>
+    <div class="card stat"><div class="label">Sim FPS</div><div class="value">@(Latest?.Fps.ToString("0") ?? "—")</div></div>
+</div>
+
+<div class="grid two" style="margin-bottom: 16px;">
+    <div class="card">
+        <h2>CPU</h2>
+        <svg class="chart" viewBox="0 0 320 140" preserveAspectRatio="none">
+            <polyline points="@Spark(s => s.Cpu, 100)" />
+        </svg>
+        <p class="muted" style="margin-top: 8px;">Alert at @Store.CpuThreshold%</p>
+    </div>
+    <div class="card">
+        <h2>RAM</h2>
+        <div class="bar" style="margin: 12px 0;"><span style="width: @(Latest?.HostRamPct ?? 0)%"></span></div>
+        <svg class="chart" viewBox="0 0 320 140" preserveAspectRatio="none">
+            <polyline points="@Spark(s => s.RamGb, 16)" />
+        </svg>
+        <p class="muted">Alert at @Store.RamThreshold%</p>
+    </div>
+</div>
+
+<div class="card">
+    <h2>World pulse</h2>
+    <p class="muted">@(Store.Active?.Running == true ? $"{Store.Active.Name} live on UDP {Store.Active.Port} · PID {Store.Active.Pid}" : "Dedicated down.")</p>
+    @if (error is not null) { <p class="danger">@error</p> }
+</div>
+
+@code {
+    string? error;
+    MetricSample? Latest => Store.Samples.LastOrDefault();
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+    void Start() => error = Store.StartServer();
+    string Spark(Func<MetricSample, double> sel, double max)
+    {
+        var samples = Store.Samples;
+        if (samples.Count < 2) return "0,70 320,70";
+        var pts = new List<string>();
+        for (var i = 0; i < samples.Count; i++)
+        {
+            var x = i / (double)(samples.Count - 1) * 320;
+            var y = 130 - Math.Clamp(sel(samples[i]) / max, 0, 1) * 110;
+            pts.Add($"{x:0.#},{y:0.#}");
+        }
+        return string.Join(" ", pts);
+    }
+}

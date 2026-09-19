@@ -1,0 +1,50 @@
+@page "/frameworks"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Frameworks</h1>
+        <p class="lede">UE4SS and PalSchema for Palworld 1.0. ReShade and OptiScaler sit beside them on the client.</p>
+    </div>
+</div>
+
+<div class="grid cards">
+    @foreach (var fw in Store.Frameworks)
+    {
+        <article class="card stack">
+            <div class="row" style="justify-content: space-between;">
+                <h2>@fw.Name</h2>
+                <span class="badge">@fw.Version</span>
+            </div>
+            <p class="muted">@(fw.Id == "ue4ss" ? "UE4SS Palworld zip from GitHub. Required by most Lua packs." : "JSON-driven Palworld data. Pair with UE4SS.")</p>
+            <p class="muted">Client @(fw.Client ? "installed" : "off") · Dedicated @(fw.Server ? "installed" : "off")</p>
+            <div class="row">
+                @if (Store.ShowClient)
+                {
+                    <button class="btn" type="button" @onclick="() => Store.InstallFramework(fw.Id, false)">Install on client</button>
+                }
+                @if (Store.ShowServer)
+                {
+                    <button class="btn btn-primary" type="button" @onclick="() => Store.InstallFramework(fw.Id, true)">Install on dedicated</button>
+                }
+            </div>
+        </article>
+    }
+    <article class="card stack">
+        <h2>ReShade</h2>
+        <p class="muted">Client-only post process. PalServer ignores it.</p>
+        <button class="btn" type="button" disabled="@(!Store.ShowClient)">Install on client</button>
+    </article>
+    <article class="card stack">
+        <h2>OptiScaler</h2>
+        <p class="muted">Client upscaler. Keep off the dedicated tree.</p>
+        <button class="btn" type="button" disabled="@(!Store.ShowClient)">Install on client</button>
+    </article>
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}

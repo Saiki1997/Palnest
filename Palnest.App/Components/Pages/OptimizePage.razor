@@ -5,26 +5,52 @@
 <div class="top">
     <div>
         <h1>Optimize</h1>
-        <p class="lede">Engine.ini presets for heavy worlds, heavy mod stacks, and network. Palnest writes them next to PalWorldSettings.ini.</p>
+        <p class="lede">Launch flags and Engine.ini presets for heavy worlds, heavy mod stacks, and network.</p>
     </div>
 </div>
 
 <div class="row" style="margin-bottom: 16px;">
-    <button class="btn" type="button" @onclick="Heavy">Heavy server</button>
-    <button class="btn" type="button" @onclick="Network">Network</button>
-    <button class="btn" type="button" @onclick="Perf">Server performance</button>
+    <button class="btn @(Store.ActivePreset == "community" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("community")'>Community</button>
+    <button class="btn @(Store.ActivePreset == "cozy" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("cozy")'>Cozy</button>
+    <button class="btn @(Store.ActivePreset == "packed" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("packed")'>Packed</button>
+    <button class="btn @(Store.ActivePreset == "heavy" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("heavy")'>Heavy server</button>
+    <button class="btn @(Store.ActivePreset == "mods" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("mods")'>Heavy mods</button>
+    <button class="btn @(Store.ActivePreset == "network" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("network")'>Network</button>
+    <button class="btn @(Store.ActivePreset == "perf" ? "btn-primary" : "")" type="button" @onclick='() => Store.ApplyPreset("perf")'>Server performance</button>
 </div>
 
-<div class="card">
-    <h2>Engine.ini</h2>
-    <textarea readonly>@string.Join('\n', Store.EngineLines)</textarea>
+<div class="grid two">
+    <div class="card">
+        <h2>Launch flags</h2>
+        <table class="table">
+            <thead><tr><th>Flag</th><th>On</th></tr></thead>
+            <tbody>
+            @foreach (var a in Store.LaunchArgs)
+            {
+                <tr>
+                    <td>
+                        <strong>@a.Flag</strong>
+                        @if (!string.IsNullOrEmpty(a.Value)) { <span class="muted"> @a.Value</span> }
+                        <p class="muted" style="font-size: 0.8rem;">@a.Note</p>
+                    </td>
+                    <td><button class="btn btn-ghost" type="button" @onclick="() => Store.ToggleArg(a.Id)">@(a.Enabled ? "On" : "Off")</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        @if (Store.Active is { } inst)
+        {
+            <p class="mono muted" style="margin-top: 12px; font-size: 0.75rem; word-break: break-all;">@Store.CommandLine(inst)</p>
+        }
+    </div>
+    <div class="card">
+        <h2>Engine.ini</h2>
+        <textarea readonly>@string.Join('\n', Store.EngineLines)</textarea>
+    </div>
 </div>
 
 @code {
     protected override void OnInitialized() => Store.Changed += OnChanged;
     void OnChanged() => InvokeAsync(StateHasChanged);
     public void Dispose() => Store.Changed -= OnChanged;
-    void Heavy() => Store.ApplyEnginePreset("heavy");
-    void Network() => Store.ApplyEnginePreset("network");
-    void Perf() => Store.ApplyEnginePreset("perf");
 }

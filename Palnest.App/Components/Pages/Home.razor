@@ -5,60 +5,167 @@
 <div class="top">
     <div>
         <h1>Dashboard</h1>
-        <p class="lede">Control center for dedicated Palworld servers. Palnest runs as a C# host — no Chromium shell, and background sampling sleeps when nothing is live.</p>
+        <p class="lede">@(Store.ShowServer ? "Global control center for dedicated Palworld servers." : "Client-only Palworld tools. Dedicated PalServer pages are hidden.")</p>
     </div>
     <div class="actions">
-        <button class="btn" type="button" @onclick="() => showImport = true">Import existing server</button>
-        <button class="btn btn-primary" type="button" @onclick="() => showCreate = true">Create new server</button>
+        @if (Store.ShowServer)
+        {
+            <button class="btn" type="button" @onclick="() => showImport = true">Import existing server</button>
+            <button class="btn btn-primary" type="button" @onclick="() => showCreate = true">Create new server</button>
+        }
+        else
+        {
+            <a class="btn btn-primary" href="/frameworks">Install UE4SS</a>
+        }
     </div>
 </div>
+
+@if (Store.ShowServer)
+{
+    <div class="card hub">
+        <div>
+            <p class="muted" style="font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;">Multi-server command hub</p>
+            <p class="muted" style="margin-top: 4px;">Start, stop, and open firewall rules across every node.</p>
+        </div>
+        <div class="actions">
+            <button class="btn" type="button" @onclick="StartAll">Start all</button>
+            <button class="btn" type="button" @onclick="StopAll">Stop all</button>
+            <button class="btn" type="button" @onclick="Store.ToggleFirewall">@(Store.FirewallOpen ? "Close firewall" : "Configure firewall")</button>
+        </div>
+    </div>
+}
 
 <div class="grid stats" style="margin-bottom: 16px;">
-    <div class="card stat">
-        <div class="label">Nodes</div>
-        <div class="value">@Store.Servers.Count</div>
-    </div>
-    <div class="card stat">
-        <div class="label">Active</div>
-        <div class="value">@Store.RunningCount</div>
-    </div>
-    <div class="card stat">
-        <div class="label">Players</div>
-        <div class="value">@Store.OnlinePlayers</div>
-    </div>
-    <div class="card stat">
-        <div class="label">CPU</div>
-        <div class="value">@(Store.Samples.LastOrDefault()?.Cpu.ToString("0") ?? "—")%</div>
-    </div>
+    @if (Store.ShowServer)
+    {
+        <div class="card stat"><div class="label">Total servers</div><div class="value">@Store.Servers.Count</div></div>
+        <div class="card stat"><div class="label">Active servers</div><div class="value">@Store.RunningCount</div></div>
+        <div class="card stat"><div class="label">Players</div><div class="value">@Store.OnlinePlayers</div></div>
+        <div class="card stat"><div class="label">CPU</div><div class="value">@(Latest?.Cpu.ToString("0") ?? "—")%</div></div>
+        <div class="card stat"><div class="label">RAM</div><div class="value">@(Latest?.RamGb.ToString("0.0") ?? "—") GB</div></div>
+        <div class="card stat"><div class="label">Disk</div><div class="value">@(Latest?.DiskPct.ToString("0") ?? "41")%</div></div>
+    }
+    else
+    {
+        <div class="card stat"><div class="label">Mode</div><div class="value" style="font-size: 1.05rem;">Client</div></div>
+        <div class="card stat"><div class="label">Mods</div><div class="value">@Store.InstalledMods.Count(m => m.Enabled)</div></div>
+        <div class="card stat"><div class="label">UE4SS</div><div class="value" style="font-size: 1.05rem;">@(Store.Frameworks.FirstOrDefault(f => f.Id == "ue4ss")?.Version ?? "—")</div></div>
+    }
 </div>
 
-<div class="grid cards">
-    @foreach (var inst in Store.Servers)
-    {
-        <article class="card">
-            <div class="row" style="justify-content: space-between;">
-                <h2>@inst.Name</h2>
-                <span class="badge"><span class="dot @(inst.Running ? "ok" : "")"></span>@(inst.Running ? "Live" : "Stopped")</span>
-            </div>
-            <p class="muted" style="margin: 8px 0 12px; font-size: 0.85rem;">UDP @inst.Port · @inst.Version · @inst.InstallPath</p>
-            <div class="row">
-                @if (inst.Running)
+@if (Store.ShowServer)
+{
+    <div class="grid two" style="margin-bottom: 16px;">
+        <div class="card">
+            <h2>CPU load</h2>
+            <svg class="chart" viewBox="0 0 320 140" preserveAspectRatio="none" aria-label="CPU chart">
+                <polyline class="fill" points="@SparkFill(s => s.Cpu, 100)" />
+                <polyline points="@Spark(s => s.Cpu, 100)" />
+            </svg>
+        </div>
+        <div class="card">
+            <h2>RAM</h2>
+            <p class="mono" style="margin: 8px 0;">@(Latest?.RamGb.ToString("0.0") ?? "0") / 16.0 GB</p>
+            <div class="bar"><span style="width: @(Latest?.HostRamPct ?? 0)%"></span></div>
+            <svg class="chart" viewBox="0 0 320 140" preserveAspectRatio="none" aria-label="RAM chart" style="margin-top: 12px;">
+                <polyline points="@Spark(s => s.RamGb, 16)" />
+            </svg>
+        </div>
+    </div>
+
+    <div class="grid cards">
+        @foreach (var inst in Store.Servers)
+        {
+            <article class="card">
+                <div class="row" style="justify-content: space-between;">
+                    <h2>@inst.Name</h2>
+                    <span class="badge"><span class="dot @(inst.Running ? "ok" : "")"></span>@(inst.Running ? "Live" : "Stopped")</span>
+                </div>
+                <p class="muted" style="margin: 8px 0 12px; font-size: 0.85rem;">UDP @inst.Port · @inst.Version · @inst.InstallPath</p>
+                <div class="row">
+                    @if (inst.Running)
+                    {
+                        <button class="btn" type="button" @onclick="() => Store.StopServer(inst.Id)">Stop</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" type="button" @onclick="() => Start(inst.Id)">Start</button>
+                    }
+                    <button class="btn btn-ghost" type="button" @onclick="() => Store.SelectServer(inst.Id)">Select</button>
+                    <select @onchange="OnPreset">
+                        <option value="community">Community</option>
+                        <option value="cozy">Cozy</option>
+                        <option value="packed">Packed</option>
+                        <option value="heavy">Heavy server</option>
+                        <option value="mods">Heavy mods</option>
+                        <option value="network">Network</option>
+                    </select>
+                </div>
+            </article>
+        }
+        <button class="card dash-create" type="button" @onclick="() => showCreate = true">
+            <strong>Create new server</strong>
+            <span class="muted" style="margin-top: 6px; font-size: 0.85rem;">New PalServer folder, ports, and world.</span>
+        </button>
+        <button class="card dash-create" type="button" @onclick="() => showImport = true">
+            <strong>Import existing server</strong>
+            <span class="muted" style="margin-top: 6px; font-size: 0.85rem;">Point at a PalServer folder you already run.</span>
+        </button>
+    </div>
+
+    <div class="grid two" style="margin-top: 16px;">
+        <div class="card">
+            <h2>Players</h2>
+            @if (Store.Players.Count == 0)
+            {
+                <p class="muted">No players yet.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead><tr><th>Name</th><th>Lv</th><th>Guild</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var p in Store.Players)
+                    {
+                        <tr>
+                            <td>@p.Name @(p.Online ? "· online" : "")</td>
+                            <td class="mono">@p.Level</td>
+                            <td>@p.Guild</td>
+                            <td class="row">
+                                <button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button>
+                                <button class="btn btn-ghost btn-danger" type="button" @onclick="() => BanPlayer(p.Id)">Ban</button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+        <div class="card">
+            <h2>Guilds</h2>
+            <table class="table">
+                <thead><tr><th>Name</th><th>Owner</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var g in Store.Guilds)
                 {
-                    <button class="btn" type="button" @onclick="() => Store.StopServer(inst.Id)">Stop</button>
+                    <tr>
+                        <td>@g.Name</td>
+                        <td>@g.Owner</td>
+                        <td><button class="btn btn-ghost btn-danger" type="button" @onclick="() => Store.RemoveGuild(g.Id)">Delete</button></td>
+                    </tr>
                 }
-                else
-                {
-                    <button class="btn btn-primary" type="button" @onclick="() => Start(inst.Id)">Start</button>
-                }
-                <button class="btn btn-ghost" type="button" @onclick="() => Store.SelectServer(inst.Id)">Select</button>
-            </div>
-        </article>
-    }
-    <button class="card dash-create" type="button" @onclick="() => showCreate = true">
-        <strong>Create new server</strong>
-        <span class="muted" style="margin-top: 6px; font-size: 0.85rem;">New PalServer folder, ports, and world.</span>
-    </button>
-</div>
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card">
+        <h2>Client only</h2>
+        <p class="muted" style="margin-top: 8px;">Dedicated PalServer pages are hidden. Install mods for the Palworld game, or switch to Server + client in Settings.</p>
+    </div>
+}
 
 @if (!string.IsNullOrEmpty(error))
 {
@@ -120,6 +227,7 @@
     string importName = "";
     string importPath = @"C:\PalServers\PalServer";
     string? error;
+    MetricSample? Latest => Store.Samples.LastOrDefault();
 
     protected override void OnInitialized() => Store.Changed += OnChanged;
     void OnChanged() => InvokeAsync(StateHasChanged);
@@ -138,4 +246,27 @@
     }
 
     void Start(string id) => error = Store.StartServer(id);
+    void BanPlayer(string id) => Store.Ban(id, "Banned");
+    void OnPreset(ChangeEventArgs e) => Store.ApplyPreset(e.Value?.ToString() ?? "community");
+    void StartAll()
+    {
+        var r = Store.StartAll();
+        error = r.Skipped > 0 ? $"{r.Started} started, {r.Skipped} skipped." : null;
+    }
+    void StopAll() => Store.StopAll();
+
+    string Spark(Func<MetricSample, double> sel, double max)
+    {
+        var samples = Store.Samples;
+        if (samples.Count < 2) return "0,70 320,70";
+        var pts = new List<string>();
+        for (var i = 0; i < samples.Count; i++)
+        {
+            var x = i / (double)(samples.Count - 1) * 320;
+            var y = 130 - Math.Clamp(sel(samples[i]) / max, 0, 1) * 110;
+            pts.Add($"{x:0.#},{y:0.#}");
+        }
+        return string.Join(" ", pts);
+    }
+    string SparkFill(Func<MetricSample, double> sel, double max) => Spark(sel, max) + " 320,140 0,140";
 }

@@ -61,6 +61,7 @@ p { margin: 0; }
   border-right: 1px solid var(--border); padding: var(--space-4);
 }
 .brand { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); margin-bottom: var(--space-5); }
+.logo { width: 36px; height: 36px; border-radius: var(--radius-sm); object-fit: cover; box-shadow: 0 0 0 1px var(--border); flex-shrink: 0; background: #0c1110; }
 .mark { width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--bg-subtle); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .brand strong { display: block; font-size: 0.95rem; }
 .brand span { display: block; color: var(--fg-muted); font-size: 0.72rem; font-family: var(--mono); }
@@ -159,7 +160,44 @@ textarea { padding: 10px 12px; min-height: 120px; font-family: var(--mono); font
   padding: var(--space-3); font-family: var(--mono); font-size: 0.78rem; max-height: 280px; overflow: auto;
   color: var(--fg-muted);
 }
-.mobile-bar { display: none; }
+.hub {
+  display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between;
+  margin-bottom: var(--space-4);
+}
+.chart {
+  height: 140px; width: 100%;
+}
+.chart polyline { fill: none; stroke: var(--accent); stroke-width: 2; }
+.chart .fill { fill: color-mix(in oklab, var(--accent) 22%, transparent); stroke: none; }
+.bar { height: 10px; border-radius: 99px; background: var(--bg); overflow: hidden; border: 1px solid var(--border); }
+.bar > span { display: block; height: 100%; background: var(--accent); }
+.progress { height: 6px; border-radius: 99px; background: var(--bg); overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--accent); width: 0; transition: width 200ms var(--ease); }
+.tabs { display: flex; gap: 4px; margin-bottom: 12px; }
+.tab {
+  min-height: 36px; padding: 0 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted); font: inherit;
+}
+.tab.active { color: var(--fg); background: var(--bg-subtle); border-color: var(--accent); }
+.modal.wide { width: min(100%, 720px); }
+.toggle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.toggle p { color: var(--fg-muted); font-size: 0.85rem; margin-top: 2px; }
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.mode-card {
+  display: flex; flex-direction: column; gap: 8px; text-align: left;
+  min-height: 120px; padding: 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--fg); font: inherit;
+  transition-property: border-color, background-color; transition-duration: var(--motion-quick); transition-timing-function: var(--ease);
+}
+.mode-card span { color: var(--fg-muted); font-size: 0.85rem; font-weight: 400; }
+.mode-card:hover { border-color: var(--border-strong); }
+.mode-card.selected { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, var(--bg)); }
 
 @media (max-width: 860px) {
   .app { flex-direction: column; }
@@ -169,6 +207,7 @@ textarea { padding: 10px 12px; min-height: 120px; font-family: var(--mono); font
   .nav a { height: 36px; font-size: 0.8rem; }
   .main { padding: var(--space-4); }
   .two { grid-template-columns: 1fr; }
+  .mode-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

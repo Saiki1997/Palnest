@@ -1,5 +1,7 @@
 namespace Palnest.Core;
 
+public enum AppMode { Server, Client, Both }
+
 public enum ModKind { Pak, Ue4ss, PalSchema, Ini, Framework }
 
 public enum ModSource { Nexus, Steam, Curseforge, Local }
@@ -51,6 +53,7 @@ public sealed class InstalledMod
     public string InstallPath { get; set; } = "";
     public int FileCount { get; set; } = 1;
     public bool ServerCompatible { get; set; } = true;
+    public List<CatalogFile> Files { get; set; } = [];
 }
 
 public sealed class CatalogMod
@@ -65,6 +68,8 @@ public sealed class CatalogMod
     public string Url { get; set; } = "";
     public string Description { get; set; } = "";
     public int Downloads { get; set; }
+    public bool ServerCompatible { get; set; } = true;
+    public List<CatalogFile> Files { get; set; } = [];
 }
 
 public sealed class PlayerInfo
@@ -123,4 +128,58 @@ public sealed class MetricSample
     public double Cpu { get; set; }
     public double RamGb { get; set; }
     public int Players { get; set; }
+    public double DiskPct { get; set; }
+    public double Fps { get; set; }
+    public double HostRamPct { get; set; }
+}
+
+public sealed class CatalogFile
+{
+    public string Name { get; set; } = "";
+    public string Size { get; set; } = "1.2 MB";
+    public ModKind Kind { get; set; }
+}
+
+public sealed class FrameworkInfo
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Version { get; set; } = "";
+    public bool Client { get; set; }
+    public bool Server { get; set; }
+}
+
+public sealed class TunnelAgent
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public bool Installed { get; set; }
+    public bool Running { get; set; }
+    public string Endpoint { get; set; } = "";
+    public string Note { get; set; } = "";
+}
+
+public sealed class SteamLatest
+{
+    public string Version { get; set; } = "1.0.5";
+    public string Build { get; set; } = "";
+    public bool Newer { get; set; }
+    public string Note { get; set; } = "";
+}
+
+public sealed class LaunchArg
+{
+    public string Id { get; set; } = "";
+    public string Flag { get; set; } = "";
+    public string Value { get; set; } = "";
+    public bool Enabled { get; set; }
+    public string Note { get; set; } = "";
+    public string Category { get; set; } = "";
+}
+
+public sealed class ServerVersion
+{
+    public string Version { get; set; } = "";
+    public string Channel { get; set; } = "stable";
+    public string Notes { get; set; } = "";
 }

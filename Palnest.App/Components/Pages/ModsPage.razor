@@ -12,13 +12,17 @@
 
 <div class="card">
     <table class="table">
-        <thead><tr><th>Name</th><th>Kind</th><th>Folder</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Kind</th><th>Source</th><th>Folder</th><th></th></tr></thead>
         <tbody>
         @foreach (var m in Store.InstalledMods)
         {
             <tr>
-                <td>@m.Name <span class="muted">@m.Author</span></td>
+                <td>
+                    @m.Name <span class="muted">@m.Author</span>
+                    @if (m.Broken) { <span class="badge">broken</span> }
+                </td>
                 <td><span class="badge">@m.Kind</span></td>
+                <td class="muted">@m.Source @m.SourceId</td>
                 <td class="mono muted">@Mods.KindFolder(m.Kind)</td>
                 <td>
                     <button class="btn btn-ghost" type="button" @onclick="() => Store.ToggleMod(m.Id)">@(m.Enabled ? "Disable" : "Enable")</button>

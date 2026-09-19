@@ -1,0 +1,61 @@
+@page "/tunnels"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Tunnels</h1>
+        <p class="lede">Skip router port-forward. playit.gg and PortWarp both carry Palworld UDP so friends can join from outside the LAN.</p>
+    </div>
+    <button class="btn" type="button" @onclick="Store.ScanTunnels">Scan again</button>
+</div>
+
+<div class="card" style="margin-bottom: 16px;">
+    <h2>Detected on this PC</h2>
+    <p class="muted" style="margin-bottom: 12px;">Palnest looks for playit.exe, pwrp.exe, and portwarp.exe — including copies already running.</p>
+    <div class="grid two">
+        @foreach (var t in Store.Tunnels)
+        {
+            <article class="card stack">
+                <div class="row" style="justify-content: space-between;">
+                    <h2>@t.Name</h2>
+                    <span class="badge"><span class="dot @(t.Running ? "ok" : t.Installed ? "live" : "")"></span>@(t.Running ? "Running" : t.Installed ? "Installed" : "Not found")</span>
+                </div>
+                <p class="muted">@t.Note</p>
+                @if (!string.IsNullOrEmpty(t.Endpoint))
+                {
+                    <p class="mono">@t.Endpoint</p>
+                }
+                <div class="row">
+                    @if (t.Running)
+                    {
+                        <button class="btn" type="button" @onclick="() => Store.StopTunnel(t.Id)">Stop</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-primary" type="button" @onclick="() => Store.StartTunnel(t.Id)">Start tunnel</button>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+</div>
+
+@if (Store.Active is { } inst)
+{
+    <div class="card">
+        <h2>Bind to @inst.Name</h2>
+        <p class="muted">Tunnels attach to PalServer.exe in @inst.InstallPath on UDP @inst.Port. Start the world first so PortWarp can see the bind.</p>
+        <p class="mono" style="margin-top: 8px; font-size: 0.78rem; word-break: break-all;">@Store.CommandLine(inst)</p>
+    </div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        Store.Changed += OnChanged;
+        Store.ScanTunnels();
+    }
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}

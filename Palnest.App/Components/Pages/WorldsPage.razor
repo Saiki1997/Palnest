@@ -5,12 +5,29 @@
 <div class="top">
     <div>
         <h1>Worlds</h1>
-        <p class="lede">Guilds and players on the active island. Add a guild, drop a player in, or remove the guild from the save.</p>
+        <p class="lede">Saves, PalWorldSettings.ini, guilds, and players on the active island.</p>
     </div>
-    <button class="btn btn-primary" type="button" @onclick="Add">Add guild</button>
+    <div class="actions">
+        <button class="btn" type="button" @onclick="Store.BackupNow">Backup world</button>
+        <button class="btn btn-primary" type="button" @onclick="Add">Add guild</button>
+    </div>
 </div>
 
-<div class="grid two">
+<div class="grid cards" style="margin-bottom: 16px;">
+    @foreach (var w in Store.Worlds)
+    {
+        <article class="card">
+            <div class="row" style="justify-content: space-between;">
+                <h2>@w.Name</h2>
+                @if (w.Active) { <span class="badge"><span class="dot ok"></span>Active</span> }
+            </div>
+            <p class="muted" style="margin-top: 8px;">Day @w.Days · @w.SizeMb MB · @w.Guilds guilds</p>
+            <p class="mono muted" style="font-size: 0.75rem; margin-top: 6px;">Saved\Level.sav · WorldOption.sav</p>
+        </article>
+    }
+</div>
+
+<div class="grid two" style="margin-bottom: 16px;">
     <div class="card">
         <h2>Guilds</h2>
         <table class="table">
@@ -49,12 +66,22 @@
                             }
                         </select>
                     </td>
-                    <td><button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button></td>
+                    <td>
+                        <button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button>
+                        <button class="btn btn-ghost btn-danger" type="button" @onclick="() => BanPlayer(p.Id)">Ban</button>
+                    </td>
                 </tr>
             }
             </tbody>
         </table>
     </div>
+</div>
+
+<div class="card">
+    <h2>PalWorldSettings.ini</h2>
+    <p class="muted" style="margin-bottom: 8px;">Dedicated stores the map in Level.sav. Settings that stick live in WorldOption.sav next to it.</p>
+    <textarea readonly>[/Script/Pal.PalGameWorldSettings]
+OptionSettings=(Difficulty=None,DayTimeSpeedRate=1.000000,NightTimeSpeedRate=1.000000,ExpRate=1.000000,PalCaptureRate=1.000000,PalSpawnNumRate=1.000000,PalDamageRateAttack=1.000000,ServerPlayerMaxNum=32,PublicPort=@(Store.Active?.Port ?? 8211),RCONEnabled=True,RCONPort=@(Store.Active?.RconPort ?? 25575),RESTAPIEnabled=True,RESTAPIPort=@(Store.Active?.RestPort ?? 8212),bIsPvP=False,DeathPenalty=Item)</textarea>
 </div>
 
 @code {
@@ -63,4 +90,5 @@
     void OnChanged() => InvokeAsync(StateHasChanged);
     public void Dispose() => Store.Changed -= OnChanged;
     void Add() { Store.AddGuild(guildName); guildName = "New guild"; }
+    void BanPlayer(string id) => Store.Ban(id, "Banned");
 }
