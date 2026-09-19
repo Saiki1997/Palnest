@@ -1,34 +1,28 @@
-# Palnest — Palworld Server & Mod Manager 1.0.7
+# Palnest 2.0 — Palworld Server & Mod Manager
 
-Desktop + web manager for Palworld dedicated servers: worlds, mods, SteamCMD, PortWarp / playit.gg tunnels, backups, REST admin, and Engine.ini performance tweaks.
-
-## Features
-
-- Multi-world fleet with in-app PalServer console (no extra terminals)
-- Import an existing PalServer folder
-- SteamCMD install / check for updates
-- Mod search by name, id, or Nexus/Thunderstore URL
-- Boot-time mod conflict checker
-- Scheduled restart + backups (10 min / 1 h / 6 h / 12 h / 1 day)
-- Players (kick / ban) and guilds
-- Optimize presets: heavy, heavy-mod, network, server performance
-- Windows app (`Palnest.exe`) via Electron
+C# (ASP.NET Core + Blazor) rewrite. One process, no Chromium shell. Background sampling sleeps when no world is live.
 
 ## Run
 
 ```bash
-npm install
-npm run dev
+dotnet run --project Palnest.App --urls http://0.0.0.0:8080
 ```
 
-Windows desktop package:
+Windows: `dotnet publish Palnest.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`
+
+## Tests
 
 ```bash
-npm run desktop:pack
+dotnet test Palnest.Tests
 ```
 
-Unzip the artifact and run `Palnest.exe`. PalServer is spawned from the PalServer folder so PortWarp / playit.gg can bind it.
+## What to try
 
-## Stack
+- **Create new server** on the dashboard (header and the dashed card)
+- Import an existing PalServer folder
+- Start / stop — console stays inside Palnest
+- Discover mods (name, id, or store URL) — PAK vs UE4SS vs PalSchema folders
+- Optimize Engine.ini presets
+- Worlds: guilds, kick / ban
 
-TanStack Start, React 19, Tailwind v4, Electron 35, Zustand.
+Broken mods warn only. If PalServer crashes, Palnest names the pack.

@@ -1,0 +1,30 @@
+@page "/optimize"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Optimize</h1>
+        <p class="lede">Engine.ini presets for heavy worlds, heavy mod stacks, and network. Palnest writes them next to PalWorldSettings.ini.</p>
+    </div>
+</div>
+
+<div class="row" style="margin-bottom: 16px;">
+    <button class="btn" type="button" @onclick="Heavy">Heavy server</button>
+    <button class="btn" type="button" @onclick="Network">Network</button>
+    <button class="btn" type="button" @onclick="Perf">Server performance</button>
+</div>
+
+<div class="card">
+    <h2>Engine.ini</h2>
+    <textarea readonly>@string.Join('\n', Store.EngineLines)</textarea>
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+    void Heavy() => Store.ApplyEnginePreset("heavy");
+    void Network() => Store.ApplyEnginePreset("network");
+    void Perf() => Store.ApplyEnginePreset("perf");
+}

@@ -1,0 +1,23 @@
+@page "/logs"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Logs</h1>
+        <p class="lede">In-app activity. PalServer output lives on the Server page so Windows does not spawn extra terminals.</p>
+    </div>
+</div>
+
+<div class="console" style="max-height: 70vh;">
+    @foreach (var line in Store.Logs)
+    {
+        <div>@line</div>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}

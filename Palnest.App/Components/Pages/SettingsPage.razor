@@ -1,0 +1,28 @@
+@page "/settings"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Settings</h1>
+        <p class="lede">Palnest 2.0 is a C# process. Background sampling only runs while a world is live.</p>
+    </div>
+</div>
+
+<div class="card stack">
+    <label class="row">
+        <input type="checkbox" @bind="Store.AutoBackup" />
+        Automatic backups
+    </label>
+    <label class="row">
+        <input type="checkbox" @bind="Store.CrashWatchdog" />
+        Crash watchdog (name the pack, then restart)
+    </label>
+    <p class="muted">Edition @PalnestStore.Edition @PalnestStore.Version</p>
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}

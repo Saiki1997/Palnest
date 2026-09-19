@@ -1,0 +1,45 @@
+@page "/discover"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Discover</h1>
+        <p class="lede">Search by name, mod id, or a Nexus / Steam / CurseForge URL. Open a pack to pick the file — Palnest routes PAK vs Lua.</p>
+    </div>
+</div>
+
+<input class="input" style="margin-bottom: 16px;" @bind="query" @bind:event="oninput" placeholder="Name, mod id, or URL" />
+
+<div class="grid cards">
+    @foreach (var hit in Hits)
+    {
+        <article class="card stack">
+            <div class="row" style="justify-content: space-between;">
+                <h2>@hit.Name</h2>
+                <span class="badge">@hit.Source</span>
+            </div>
+            <p class="muted" style="font-size: 0.85rem;">@hit.Author · @hit.Kind</p>
+            <p class="muted" style="font-size: 0.9rem;">@hit.Description</p>
+            <div class="row">
+                <button class="btn btn-primary" type="button" @onclick="() => Store.InstallCatalog(hit)">Install @hit.Kind</button>
+                <a class="btn btn-ghost" href="@hit.Url" target="_blank" rel="noreferrer">Open page</a>
+            </div>
+        </article>
+    }
+</div>
+
+@code {
+    string query = "";
+    IEnumerable<CatalogMod> Hits =>
+        Mods.Catalog.Where(m =>
+            string.IsNullOrWhiteSpace(query) ||
+            m.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            m.SourceId.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            m.Url.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            m.Id.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}

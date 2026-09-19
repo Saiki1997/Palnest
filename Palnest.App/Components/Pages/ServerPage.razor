@@ -1,0 +1,97 @@
+@page "/server"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Server</h1>
+        <p class="lede">Start PalServer.exe from the world folder so PortWarp and playit.gg can attach. Console stays in Palnest.</p>
+    </div>
+    <div class="actions">
+        <button class="btn btn-primary" type="button" @onclick="() => showCreate = true">Create new server</button>
+        @if (Store.Active?.Running == true)
+        {
+            <button class="btn" type="button" @onclick="() => Store.StopServer()">Stop</button>
+        }
+        else
+        {
+            <button class="btn btn-primary" type="button" @onclick="Start">Start</button>
+        }
+    </div>
+</div>
+
+@if (Store.Active is { } inst)
+{
+    <div class="grid two">
+        <div class="card stack">
+            <h2>@inst.Name</h2>
+            <p class="muted">@Fleet.ExePath(inst, @"C:\PalServers\PalServer")</p>
+            <p class="mono">UDP @inst.Port · query @inst.QueryPort · REST @inst.RestPort · RCON @inst.RconPort</p>
+            <div class="console">
+                @foreach (var line in inst.Console.TakeLast(40))
+                {
+                    <div>@line</div>
+                }
+                @if (inst.Console.Count == 0)
+                {
+                    <div>Console is idle. Start the world to capture PalServer output here.</div>
+                }
+            </div>
+            @if (error is not null) { <p class="danger">@error</p> }
+        </div>
+        <div class="card stack">
+            <h2>Players</h2>
+            @if (Store.Players.Count == 0)
+            {
+                <p class="muted">No players in this world yet.</p>
+            }
+            else
+            {
+                <table class="table">
+                    <thead><tr><th>Name</th><th>Lv</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var p in Store.Players)
+                    {
+                        <tr>
+                            <td>@p.Name</td>
+                            <td class="mono">@p.Level</td>
+                            <td class="row">
+                                <button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button>
+                                <button class="btn btn-ghost btn-danger" type="button" @onclick="() => Ban(p.Id)">Ban</button>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </div>
+    </div>
+}
+
+@if (showCreate)
+{
+    <div class="modal-back" @onclick="() => showCreate = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h2>Create new server</h2>
+            <div class="stack">
+                <div class="field"><label>Name</label><input class="input" @bind="name" /></div>
+                <div class="row">
+                    <button class="btn btn-primary" type="button" @onclick="Create">Create</button>
+                    <button class="btn" type="button" @onclick="() => showCreate = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool showCreate;
+    string name = "";
+    string? error;
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+    void Start() => error = Store.StartServer();
+    void Create() { error = Store.CreateServer(name); if (error is null) showCreate = false; }
+    void Ban(string id) => Store.Ban(id, "Banned from server");
+}

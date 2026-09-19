@@ -1,0 +1,141 @@
+@page "/"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Dashboard</h1>
+        <p class="lede">Control center for dedicated Palworld servers. Palnest runs as a C# host — no Chromium shell, and background sampling sleeps when nothing is live.</p>
+    </div>
+    <div class="actions">
+        <button class="btn" type="button" @onclick="() => showImport = true">Import existing server</button>
+        <button class="btn btn-primary" type="button" @onclick="() => showCreate = true">Create new server</button>
+    </div>
+</div>
+
+<div class="grid stats" style="margin-bottom: 16px;">
+    <div class="card stat">
+        <div class="label">Nodes</div>
+        <div class="value">@Store.Servers.Count</div>
+    </div>
+    <div class="card stat">
+        <div class="label">Active</div>
+        <div class="value">@Store.RunningCount</div>
+    </div>
+    <div class="card stat">
+        <div class="label">Players</div>
+        <div class="value">@Store.OnlinePlayers</div>
+    </div>
+    <div class="card stat">
+        <div class="label">CPU</div>
+        <div class="value">@(Store.Samples.LastOrDefault()?.Cpu.ToString("0") ?? "—")%</div>
+    </div>
+</div>
+
+<div class="grid cards">
+    @foreach (var inst in Store.Servers)
+    {
+        <article class="card">
+            <div class="row" style="justify-content: space-between;">
+                <h2>@inst.Name</h2>
+                <span class="badge"><span class="dot @(inst.Running ? "ok" : "")"></span>@(inst.Running ? "Live" : "Stopped")</span>
+            </div>
+            <p class="muted" style="margin: 8px 0 12px; font-size: 0.85rem;">UDP @inst.Port · @inst.Version · @inst.InstallPath</p>
+            <div class="row">
+                @if (inst.Running)
+                {
+                    <button class="btn" type="button" @onclick="() => Store.StopServer(inst.Id)">Stop</button>
+                }
+                else
+                {
+                    <button class="btn btn-primary" type="button" @onclick="() => Start(inst.Id)">Start</button>
+                }
+                <button class="btn btn-ghost" type="button" @onclick="() => Store.SelectServer(inst.Id)">Select</button>
+            </div>
+        </article>
+    }
+    <button class="card dash-create" type="button" @onclick="() => showCreate = true">
+        <strong>Create new server</strong>
+        <span class="muted" style="margin-top: 6px; font-size: 0.85rem;">New PalServer folder, ports, and world.</span>
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <p class="danger" style="margin-top: 16px;">@error</p>
+}
+
+@if (showCreate)
+{
+    <div class="modal-back" @onclick="() => showCreate = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h2>Create new server</h2>
+            <p>Palnest writes a world slot and starts PalServer.exe from the folder you choose.</p>
+            <div class="stack">
+                <div class="field">
+                    <label>World name</label>
+                    <input class="input" @bind="createName" placeholder="Build Yard" />
+                </div>
+                <div class="field">
+                    <label>PalServer folder (optional)</label>
+                    <input class="input" @bind="createPath" placeholder="C:\PalServers\BuildYard" />
+                </div>
+                <div class="row">
+                    <button class="btn btn-primary" type="button" @onclick="Create">Create</button>
+                    <button class="btn" type="button" @onclick="() => showCreate = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (showImport)
+{
+    <div class="modal-back" @onclick="() => showImport = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h2>Import existing server</h2>
+            <p>Point Palnest at a PalServer folder that already has PalServer.exe.</p>
+            <div class="stack">
+                <div class="field">
+                    <label>Name</label>
+                    <input class="input" @bind="importName" placeholder="Imported world" />
+                </div>
+                <div class="field">
+                    <label>Folder</label>
+                    <input class="input" @bind="importPath" placeholder="C:\PalServers\PalServer" />
+                </div>
+                <div class="row">
+                    <button class="btn btn-primary" type="button" @onclick="Import">Import</button>
+                    <button class="btn" type="button" @onclick="() => showImport = false">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    bool showCreate, showImport;
+    string createName = "";
+    string createPath = "";
+    string importName = "";
+    string importPath = @"C:\PalServers\PalServer";
+    string? error;
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+
+    void Create()
+    {
+        error = Store.CreateServer(createName, string.IsNullOrWhiteSpace(createPath) ? null : createPath);
+        if (error is null) { showCreate = false; createName = ""; createPath = ""; }
+    }
+
+    void Import()
+    {
+        error = Store.ImportServer(importPath, importName);
+        if (error is null) showImport = false;
+    }
+
+    void Start(string id) => error = Store.StartServer(id);
+}

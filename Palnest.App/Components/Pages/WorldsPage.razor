@@ -1,0 +1,66 @@
+@page "/worlds"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Worlds</h1>
+        <p class="lede">Guilds and players on the active island. Add a guild, drop a player in, or remove the guild from the save.</p>
+    </div>
+    <button class="btn btn-primary" type="button" @onclick="Add">Add guild</button>
+</div>
+
+<div class="grid two">
+    <div class="card">
+        <h2>Guilds</h2>
+        <table class="table">
+            <thead><tr><th>Name</th><th>Owner</th><th>Members</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var g in Store.Guilds)
+            {
+                <tr>
+                    <td>@g.Name</td>
+                    <td>@g.Owner</td>
+                    <td class="mono">@g.Members</td>
+                    <td><button class="btn btn-ghost btn-danger" type="button" @onclick="() => Store.RemoveGuild(g.Id)">Delete</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="row" style="margin-top: 12px;">
+            <input class="input" style="flex:1" @bind="guildName" placeholder="Guild name" />
+        </div>
+    </div>
+    <div class="card">
+        <h2>Players</h2>
+        <table class="table">
+            <thead><tr><th>Name</th><th>Guild</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var p in Store.Players)
+            {
+                <tr>
+                    <td>@p.Name</td>
+                    <td>
+                        <select @bind="p.Guild" @bind:after="() => Store.AssignPlayerToGuild(p.Id, p.Guild)">
+                            <option value="">—</option>
+                            @foreach (var g in Store.Guilds)
+                            {
+                                <option value="@g.Name">@g.Name</option>
+                            }
+                        </select>
+                    </td>
+                    <td><button class="btn btn-ghost" type="button" @onclick="() => Store.Kick(p.Id)">Kick</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    string guildName = "New guild";
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+    void Add() { Store.AddGuild(guildName); guildName = "New guild"; }
+}

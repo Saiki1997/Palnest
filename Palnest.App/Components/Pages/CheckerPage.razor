@@ -1,0 +1,36 @@
+@page "/checker"
+@inject PalnestStore Store
+
+<div class="top">
+    <div>
+        <h1>Mod checker</h1>
+        <p class="lede">Overlapping files are the only hard stop. Broken packs are warnings — PalServer can still start.</p>
+    </div>
+</div>
+
+<div class="grid stats" style="margin-bottom: 16px;">
+    <div class="card stat"><div class="label">Overlaps</div><div class="value">@Findings.Count(f => f.Severity == "error")</div></div>
+    <div class="card stat"><div class="label">Warnings</div><div class="value">@Findings.Count(f => f.Severity == "warn")</div></div>
+</div>
+
+@if (!Findings.Any())
+{
+    <div class="card"><p>No start conflicts. PalServer can start.</p></div>
+}
+else
+{
+    <div class="stack">
+        @foreach (var f in Findings)
+        {
+            <article class="card">
+                <span class="badge">@f.Kind</span>
+                <h2 style="margin-top: 8px;">@f.Title</h2>
+                <p class="muted">@f.Detail</p>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    IReadOnlyList<Finding> Findings => Mods.RunChecker(Store.InstalledMods);
+}

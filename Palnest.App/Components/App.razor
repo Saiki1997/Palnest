@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0b1012" />
+    <base href="/" />
+    <title>Palnest — Palworld Server & Mod Manager</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="app.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <Routes @rendermode="InteractiveServer" />
+    <script src="_framework/blazor.web.js"></script>
+    <script>
+      window.addEventListener("message", function (e) {
+        if (!e.data || e.data.type !== "preview-navigate") return;
+        if (typeof e.data.path === "string") location.pathname = e.data.path;
+      });
+    </script>
+</body>
+</html>

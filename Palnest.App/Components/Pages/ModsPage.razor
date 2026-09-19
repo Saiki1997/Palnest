@@ -1,0 +1,36 @@
+@page "/mods"
+@inject PalnestStore Store
+@implements IDisposable
+
+<div class="top">
+    <div>
+        <h1>Installed mods</h1>
+        <p class="lede">PAK files go to ~mods. UE4SS Lua goes to ue4ss/Mods. PalSchema JSON goes under PalSchema/mods. Broken packs do not block start.</p>
+    </div>
+    <a class="btn btn-primary" href="/discover">Discover mods</a>
+</div>
+
+<div class="card">
+    <table class="table">
+        <thead><tr><th>Name</th><th>Kind</th><th>Folder</th><th></th></tr></thead>
+        <tbody>
+        @foreach (var m in Store.InstalledMods)
+        {
+            <tr>
+                <td>@m.Name <span class="muted">@m.Author</span></td>
+                <td><span class="badge">@m.Kind</span></td>
+                <td class="mono muted">@Mods.KindFolder(m.Kind)</td>
+                <td>
+                    <button class="btn btn-ghost" type="button" @onclick="() => Store.ToggleMod(m.Id)">@(m.Enabled ? "Disable" : "Enable")</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+    void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => Store.Changed -= OnChanged;
+}
