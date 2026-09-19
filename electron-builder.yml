@@ -1,0 +1,37 @@
+appId: com.palnest.app
+productName: Palnest
+copyright: Palnest
+asar: true
+directories:
+  output: dist-desktop
+  buildResources: electron/resources
+files:
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: .output-desktop
+    to: nitro
+    filter:
+      - "**/*"
+win:
+  icon: electron/resources/icon.png
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  artifactName: Palnest-${version}-windows.${ext}
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Palnest
+  deleteAppDataOnUninstall: false
+  artifactName: Palnest-Setup-${version}.${ext}
+extraMetadata:
+  main: electron/main.mjs
+electronVersion: 35.5.1

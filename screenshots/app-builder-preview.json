@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Palworld Server & Mod Manager",
+      "hasCanvas": false,
+      "bodyTextLen": 1913,
+      "bodyTextHash": "66fedcee81b872cc750b5b0dee8e24b0928527b28dc0126cde7fa4bec99a039b",
+      "bodyTextPrefix": "Palnest Palworld Server & Mod Manager 1.0.5 Set up the desktop c",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Palworld Server & Mod Manager",
+      "hasCanvas": false,
+      "bodyTextLen": 1913,
+      "bodyTextHash": "66fedcee81b872cc750b5b0dee8e24b0928527b28dc0126cde7fa4bec99a039b",
+      "bodyTextPrefix": "Palnest Palworld Server & Mod Manager 1.0.5 Set up the desktop c",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

@@ -1,0 +1,364 @@
+import { useEffect, useState } from "react";
+import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
+import { StatusPips, useFleet } from "@/components/fleet-bar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { joinHost, joinIp, providerMeta, TUNNEL_PROVIDERS, tunnelLaunchFlags } from "@/lib/tunnels";
+import { overlayInstanceArgs } from "@/lib/fleet";
+import { denListenLabel, isSlowListenBuild } from "@/lib/listen";
+import { renderCommandLine } from "@/lib/args";
+import { mapUpnp } from "@/lib/runtime";
+import { useAppStore } from "@/lib/store";
+import { cn } from "@/lib/utils";
+import type { TunnelProvider } from "@/lib/types";
+import { hostDetectAgents } from "@/lib/host";
+import { emptyAgentScan, type AgentScan } from "@/lib/agents";
+
+export const Route = createFileRoute("/_app/tunnels")({ component: TunnelsPage });
+
+async function copyText(value: string, ok: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+    toast.success(ok);
+  } catch {
+    toast.message(value);
+  }
+}
+
+function TunnelsPage() {
+  const mode = useAppStore((s) => s.mode);
+  const { fleet, activeId } = useFleet();
+  const selectServer = useAppStore((s) => s.selectServer);
+  const setTunnelProvider = useAppStore((s) => s.setTunnelProvider);
+  const runTunnel = useAppStore((s) => s.runTunnel);
+  const args = useAppStore((s) => s.launchArgs);
+  const setOps = useAppStore((s) => s.setOps);
+  const ops = useAppStore((s) => s.ops);
+  const [picked, setPicked] = useState<string>(activeId);
+  const [agents, setAgents] = useState<AgentScan>(() => emptyAgentScan(true));
+  const [scanning, setScanning] = useState(false);
+
+  function scanAgents() {
+    setScanning(true);
+    void hostDetectAgents()
+      .then((hit) => {
+        setAgents(hit);
+        if (hit.playit.installed || hit.portwarp.installed) {
+          toast.success(
+            [
+              hit.portwarp.running || hit.portwarp.installed ? `PortWarp ${hit.portwarp.running ? "running" : "installed"}` : "",
+              hit.playit.running || hit.playit.installed ? `playit ${hit.playit.running ? "running" : "installed"}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ") || "Scan complete",
+          );
+        } else {
+          toast.message(hit.simulated ? "This preview cannot see tunnel apps on your PC. Palnest.exe will." : "No PortWarp or playit found.");
+        }
+      })
+      .finally(() => setScanning(false));
+  }
+
+  useEffect(() => {
+    scanAgents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (mode === "client") return <Navigate to="/" />;
+
+  const inst = fleet.find((i) => i.id === picked) ?? fleet.find((i) => i.id === activeId) ?? fleet[0];
+  if (!inst) {
+    return (
+      <div>
+        <PageHeader title="Tunnels" description="Create a dedicated world first." />
+        <Button asChild>
+          <Link to="/server">Open Server</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  const meta = providerMeta(inst.tunnel.provider);
+  const flags = tunnelLaunchFlags(inst.tunnel);
+  const cmd = renderCommandLine("PalServer.exe", overlayInstanceArgs(args, inst));
+  const publicBits = cmd.split(" ").filter((p) => p.startsWith("-public") || p === "-publiclobby");
+
+  function act(action: Parameters<typeof runTunnel>[1], provider?: TunnelProvider) {
+    const err = runTunnel(inst.id, action, provider);
+    if (err) toast.error(err);
+    else if (action === "start") toast.success(`${inst.name} tunnel is online`);
+    else if (action === "install") toast.success("Agent staged in this world");
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Tunnels"
+        description="Skip router port-forward. playit.gg and PortWarp both carry Palworld UDP so friends can join from outside the LAN."
+      />
+
+      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-medium">Detected on this PC</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Palnest.exe looks for playit.exe, pwrp.exe, and portwarp.exe — including copies already running.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" disabled={scanning} onClick={() => scanAgents()}>
+            {scanning ? "Scanning…" : "Scan again"}
+          </Button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([agents.portwarp, agents.playit] as const).map((hit) => (
+            <article key={hit.kind} className="rounded-md border border-border bg-background p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">{hit.name}</p>
+                <Badge variant={hit.running ? "ok" : hit.installed ? "outline" : "outline"}>
+                  {hit.running ? "Running" : hit.installed ? "Installed" : agents.simulated ? "Preview" : "Not found"}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">{hit.note}</p>
+              {hit.path ? <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{hit.path}</p> : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <div className="mb-6 grid gap-3 lg:grid-cols-2">
+        {TUNNEL_PROVIDERS.map((p) => (
+          <article key={p.id} className="rounded-xl border border-border bg-card p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="font-medium">{p.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{p.blurb}</p>
+              </div>
+              <Badge variant="outline">{p.protocol}</Badge>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button asChild variant="outline" size="sm">
+                <a href={p.download} target="_blank" rel="noreferrer">
+                  Download agent
+                </a>
+              </Button>
+              <Button asChild variant="ghost" size="sm">
+                <a href={p.url} target="_blank" rel="noreferrer">
+                  Docs
+                </a>
+              </Button>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="mb-3 flex flex-wrap gap-2">
+        {fleet.map((box) => (
+          <button
+            key={box.id}
+            type="button"
+            onClick={() => {
+              setPicked(box.id);
+              selectServer(box.id);
+            }}
+            className={cn(
+              "h-11 rounded-sm border px-3 text-sm font-medium",
+              box.id === inst.id ? "border-primary bg-card" : "border-border hover:bg-muted",
+            )}
+          >
+            {box.name}
+          </button>
+        ))}
+      </div>
+
+      <section className="rounded-xl border border-border bg-card p-5">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="font-medium">{inst.name}</h2>
+            <p className="mt-1 font-mono text-xs text-muted-foreground">
+              Local UDP {inst.port} · query {inst.queryPort}
+            </p>
+            {inst.running ? (
+              <p className="mt-1 text-sm text-muted-foreground">{denListenLabel(inst)}</p>
+            ) : null}
+          </div>
+          <StatusPips inst={inst} />
+        </div>
+
+        <p className="mb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">Provider</p>
+        <div className="mb-5 grid gap-2 sm:grid-cols-3">
+          {([{ id: "none" as const, name: "Direct / LAN", body: "You forward UDP yourself." }, ...TUNNEL_PROVIDERS.map((p) => ({ id: p.id, name: p.name, body: p.protocol }))]).map(
+            (p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setTunnelProvider(inst.id, p.id)}
+                className={cn(
+                  "rounded-lg border p-3 text-left",
+                  inst.tunnel.provider === p.id ? "border-primary bg-background" : "border-border hover:bg-muted",
+                )}
+              >
+                <p className="text-sm font-medium">{p.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{p.body}</p>
+              </button>
+            ),
+          )}
+        </div>
+
+        {inst.tunnel.provider === "none" ? (
+          <div>
+            <p className="text-sm text-muted-foreground">
+              Forward UDP {inst.port} (game) and {inst.queryPort} (Steam query) on the host router, or pick a tunnel so Palnest can fill{" "}
+              <span className="font-mono">-publicip</span> / <span className="font-mono">-publicport</span>.
+            </p>
+            <Button
+              className="mt-4"
+              variant="outline"
+              onClick={() => {
+                setOps({ upnp: true });
+                void mapUpnp(inst.port, true);
+                toast.success(ops?.upnp ? "UPnP already on" : "UPnP mapping requested for this world");
+              }}
+            >
+              Try UPnP on UDP {inst.port}
+            </Button>
+          </div>
+        ) : (
+          <ol className="grid gap-4">
+            <li className="grid grid-cols-[auto_1fr] gap-3">
+              <span className="flex size-8 items-center justify-center rounded-full border border-border text-sm">1</span>
+              <div>
+                <p className="font-medium">Install the {meta?.name} agent</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Palnest stages the agent next to PalServer. On the desktop app it runs beside the world; in this preview it is simulated.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" onClick={() => act("install", inst.tunnel.provider)} disabled={inst.tunnel.agentInstalled}>
+                    {inst.tunnel.agentInstalled ? `Agent ${inst.tunnel.agentVersion}` : "Install agent"}
+                  </Button>
+                  {meta ? (
+                    <Button size="sm" variant="outline" asChild>
+                      <a href={meta.download} target="_blank" rel="noreferrer">
+                        Official download
+                      </a>
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </li>
+
+            {inst.tunnel.provider === "playit" ? (
+              <li className="grid grid-cols-[auto_1fr] gap-3">
+                <span className="flex size-8 items-center justify-center rounded-full border border-border text-sm">2</span>
+                <div>
+                  <p className="font-medium">Claim the playit agent</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Open the claim URL, sign in, then confirm here. Palworld tunnels use the Palworld type, origin 127.0.0.1:{inst.port}.
+                  </p>
+                  {inst.tunnel.claimUrl ? (
+                    <p className="mt-2 break-all font-mono text-xs text-muted-foreground">{inst.tunnel.claimUrl}</p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {inst.tunnel.claimUrl ? (
+                      <Button size="sm" variant="outline" asChild>
+                        <a href={inst.tunnel.claimUrl} target="_blank" rel="noreferrer">
+                          Open claim
+                        </a>
+                      </Button>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => act("claim")} disabled={!inst.tunnel.agentInstalled}>
+                        Get claim URL
+                      </Button>
+                    )}
+                    <Button size="sm" onClick={() => act("confirm")} disabled={inst.tunnel.status !== "claim"}>
+                      I've claimed it
+                    </Button>
+                  </div>
+                </div>
+              </li>
+            ) : (
+              <li className="grid grid-cols-[auto_1fr] gap-3">
+                <span className="flex size-8 items-center justify-center rounded-full border border-border text-sm">2</span>
+                <div>
+                  <p className="font-medium">Sign in to PortWarp</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    The agent uses your PortWarp account. Palnest waits until PalServer binds UDP {inst.port}
+                    {isSlowListenBuild(inst.version)
+                      ? ` — ${inst.version} listens after world load, not when the process starts.`
+                      : "."}{" "}
+                    Steam query {inst.queryPort} is attached only if it is listening as UDP (older worlds often bind it as TCP, which A2S never sees).
+                  </p>
+                </div>
+              </li>
+            )}
+
+            <li className="grid grid-cols-[auto_1fr] gap-3">
+              <span className="flex size-8 items-center justify-center rounded-full border border-border text-sm">3</span>
+              <div>
+                <p className="font-medium">Create and start the tunnel</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {inst.tunnel.provider === "playit"
+                    ? "Type Palworld, leave origin at localhost. Palnest then writes -publicip and -publicport."
+                    : `UDP game port after PalServer binds. Query extra only if UDP ${inst.queryPort} is up — PortWarp will not auto-detect A2S.`}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => act("create")} disabled={!inst.tunnel.agentInstalled}>
+                    Create tunnel
+                  </Button>
+                  {inst.tunnel.status === "online" ? (
+                    <Button size="sm" variant="outline" onClick={() => act("stop")}>
+                      Stop tunnel
+                    </Button>
+                  ) : (
+                    <Button size="sm" onClick={() => act("start")} disabled={!inst.tunnel.agentInstalled}>
+                      Start tunnel
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => act("reset")}>
+                    Clear
+                  </Button>
+                </div>
+                {inst.tunnel.lastError ? <p className="mt-2 text-sm text-danger">{inst.tunnel.lastError}</p> : null}
+              </div>
+            </li>
+          </ol>
+        )}
+
+        {inst.tunnel.game ? (
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg border border-border bg-background p-4">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Join (IP)</p>
+              <p className="mt-2 break-all font-mono text-sm">{joinIp(inst)}</p>
+              <Button size="sm" variant="outline" className="mt-3" onClick={() => copyText(joinIp(inst), "IP copied")}>
+                Copy IP
+              </Button>
+            </div>
+            <div className="rounded-lg border border-border bg-background p-4">
+              <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Join (host)</p>
+              <p className="mt-2 break-all font-mono text-sm">{joinHost(inst)}</p>
+              <Button size="sm" variant="outline" className="mt-3" onClick={() => copyText(joinHost(inst), "Host copied")}>
+                Copy host
+              </Button>
+            </div>
+            {inst.tunnel.query ? (
+              <div className="rounded-lg border border-border bg-background p-4 sm:col-span-2">
+                <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Steam query extra</p>
+                <p className="mt-2 font-mono text-sm">
+                  {inst.tunnel.query.host}:{inst.tunnel.query.port}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {flags.publicIp ? (
+          <div className="mt-4 rounded-lg border border-border bg-background p-4">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Launch flags Palnest will add</p>
+            <p className="mt-2 break-all font-mono text-xs">{publicBits.join(" ") || "—"}</p>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
