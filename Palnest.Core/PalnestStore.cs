@@ -2,7 +2,7 @@ namespace Palnest.Core;
 
 public sealed class PalnestStore
 {
-    public const string Version = "2.0.0";
+    public const string Version = "2.1.0";
     public const string Edition = "Palworld Server & Mod Manager";
 
     readonly object _gate = new();

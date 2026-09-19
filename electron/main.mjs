@@ -23,15 +23,21 @@ function resourceIcon() {
   return fs.existsSync(packed) ? packed : undefined;
 }
 
-function nitroRoot() {
-  if (app.isPackaged) return path.join(process.resourcesPath, "nitro");
-  const local = path.join(__dirname, "..", ".output-desktop");
-  if (fs.existsSync(path.join(local, "server", "index.mjs"))) return local;
-  return path.join(__dirname, "..", ".output");
+function hostRoot() {
+  if (app.isPackaged) return path.join(process.resourcesPath, "host");
+  const local = path.join(__dirname, "..", "publish", "win-x64");
+  if (fs.existsSync(path.join(local, "Palnest.exe")) || fs.existsSync(path.join(local, "Palnest"))) return local;
+  return path.join(__dirname, "..", "Palnest.App");
 }
 
-function serverEntry() {
-  return path.join(nitroRoot(), "server", "index.mjs");
+function hostEntry() {
+  const root = hostRoot();
+  const win = path.join(root, "Palnest.exe");
+  const unix = path.join(root, "Palnest");
+  if (process.platform === "win32") return win;
+  if (fs.existsSync(unix)) return unix;
+  if (fs.existsSync(win)) return win;
+  return unix;
 }
 
 function findFreePort(start = 47821) {
@@ -116,31 +122,33 @@ function tailHint() {
 }
 
 function startNitro(port) {
-  const entry = serverEntry();
+  const entry = hostEntry();
   if (!fs.existsSync(entry)) {
-    throw new Error("Palnest server files are missing. Rebuild the Windows package.");
+    throw new Error("Palnest desktop files are missing. Rebuild the Windows package.");
   }
-  const cwd = nitroRoot();
+  const cwd = hostRoot();
   nitroTail = "";
-  nitroChild = spawn(process.execPath, [entry], {
+  const isDotnet = /\.exe$/i.test(entry) || path.basename(entry) === "Palnest";
+  nitroChild = spawn(entry, [], {
     cwd,
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: "1",
-      NITRO_PORT: String(port),
-      PORT: String(port),
-      NITRO_HOST: "127.0.0.1",
-      HOST: "127.0.0.1",
-      NODE_ENV: "production",
+      PALNEST_DESKTOP: "1",
+      ASPNETCORE_URLS: `http://127.0.0.1:${port}`,
+      ASPNETCORE_ENVIRONMENT: "Production",
+      DOTNET_NOLOGO: "1",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
+  if (!isDotnet) {
+    /* kept for local fallback */
+  }
   nitroChild.stdout?.on("data", noteNitro);
   nitroChild.stderr?.on("data", noteNitro);
   nitroChild.on("exit", (code) => {
     if (code && mainWindow && !mainWindow.isDestroyed()) {
-      dialog.showErrorBox("Palnest", `The local den stopped (code ${code}).${tailHint()}`);
+      dialog.showErrorBox("Palnest", `Palnest stopped (code ${code}).${tailHint()}`);
     }
   });
 }

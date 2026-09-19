@@ -4,9 +4,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const outDir = path.join(root, ".output-desktop");
 const distDir = path.join(root, "dist-desktop");
 const artifacts = path.join(root, "artifacts");
+const publishDir = path.join(root, "publish", "win-x64");
+const dotnet = path.join(root, ".dotnet", "dotnet");
 
 function run(cmd, args, env = {}) {
   return new Promise((resolve, reject) => {
@@ -22,15 +23,6 @@ function run(cmd, args, env = {}) {
   });
 }
 
-function stripMaps(dir) {
-  if (!fs.existsSync(dir)) return;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) stripMaps(full);
-    else if (entry.name.endsWith(".map")) fs.unlinkSync(full);
-  }
-}
-
 function copyIfExists(from, to) {
   if (!fs.existsSync(from)) return false;
   fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -41,29 +33,43 @@ function copyIfExists(from, to) {
 fs.mkdirSync(artifacts, { recursive: true });
 fs.mkdirSync(distDir, { recursive: true });
 
-process.env.NITRO_PRESET = "node-server";
-process.env.NITRO_OUTPUT = ".output-desktop";
+const dotnetEnv = {
+  DOTNET_ROOT: path.join(root, ".dotnet"),
+  DOTNET_CLI_HOME: path.join(root, ".dotnet-home"),
+  DOTNET_NOLOGO: "1",
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1",
+};
+dotnetEnv.PATH = `${dotnetEnv.DOTNET_ROOT}:${process.env.PATH ?? ""}`;
 
-console.log("[palnest-desktop] building node-server bundle…");
-await run("node", ["scripts/with-app-env.mjs", "vite", "build"], {
-  NITRO_PRESET: "node-server",
-  NITRO_OUTPUT: ".output-desktop",
-});
+console.log("[palnest-desktop] publishing C# host win-x64…");
+await run(
+  fs.existsSync(dotnet) ? dotnet : "dotnet",
+  [
+    "publish",
+    "Palnest.App/Palnest.App.csproj",
+    "-c",
+    "Release",
+    "-r",
+    "win-x64",
+    "--self-contained",
+    "true",
+    "-p:PublishSingleFile=true",
+    "-p:IncludeNativeLibrariesForSelfExtract=true",
+    "-p:EnableCompressionInSingleFile=true",
+    "-p:DebugType=none",
+    "-o",
+    publishDir,
+  ],
+  dotnetEnv,
+);
 
-const entry = path.join(outDir, "server", "index.mjs");
-if (!fs.existsSync(entry)) {
-  const fallback = path.join(root, ".output", "server", "index.mjs");
-  if (!fs.existsSync(fallback)) {
-    throw new Error("Desktop build is missing .output-desktop/server/index.mjs");
-  }
-  fs.cpSync(path.join(root, ".output"), outDir, { recursive: true });
+const exe = path.join(publishDir, "Palnest.exe");
+if (!fs.existsSync(exe)) {
+  throw new Error("dotnet publish did not emit Palnest.exe");
 }
 
-stripMaps(outDir);
-console.log("[palnest-desktop] stripped source maps");
-
-console.log("[palnest-desktop] packaging Windows zip…");
-await run("npx", ["electron-builder", "--win", "zip", "--x64", "--config", "electron-builder.yml"], {
+console.log("[palnest-desktop] packaging Windows installer + zip…");
+await run("npx", ["electron-builder", "--win", "nsis", "zip", "--x64", "--config", "electron-builder.yml"], {
   CSC_IDENTITY_AUTO_DISCOVERY: "false",
 });
 
@@ -71,29 +77,20 @@ const zips = fs
   .readdirSync(distDir)
   .filter((f) => f.endsWith(".zip") && /win/i.test(f))
   .map((f) => path.join(distDir, f));
-if (!zips.length) {
-  throw new Error("electron-builder did not emit a Windows zip");
-}
 zips.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+if (!zips.length) throw new Error("electron-builder did not emit a Windows zip");
 const zip = zips[0];
 copyIfExists(zip, path.join(artifacts, "Palnest-windows.zip"));
 copyIfExists(zip, path.join(distDir, "Palnest-windows.zip"));
-copyIfExists(zip, path.join(artifacts, "Palnest-Setup.zip"));
-copyIfExists(zip, path.join(distDir, "Palnest-Setup.zip"));
 
 const setups = fs
   .readdirSync(distDir)
   .filter((f) => /\.exe$/i.test(f) && /setup/i.test(f))
   .map((f) => path.join(distDir, f));
 setups.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-if (setups[0]) {
-  copyIfExists(setups[0], path.join(artifacts, "Palnest-Setup.exe"));
-  copyIfExists(setups[0], path.join(distDir, "Palnest-Setup.exe"));
-}
+if (!setups[0]) throw new Error("electron-builder did not emit a Windows installer");
+copyIfExists(setups[0], path.join(artifacts, "Palnest-Setup.exe"));
+copyIfExists(setups[0], path.join(distDir, "Palnest-Setup.exe"));
 
-const unpacked = path.join(distDir, "win-unpacked", "Palnest.exe");
-if (fs.existsSync(unpacked)) {
-  console.log("[palnest-desktop] Palnest.exe ready at", unpacked);
-}
-
-console.log("[palnest-desktop] artifact", zip);
+console.log("[palnest-desktop] installer", setups[0]);
+console.log("[palnest-desktop] zip", zip);

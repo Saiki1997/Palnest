@@ -7,7 +7,9 @@ obj/
 node_modules/
 .output/
 .output-desktop/
+publish/
 dist-desktop/
 artifacts/*.zip
+artifacts/*.exe
 .env
 .vercel

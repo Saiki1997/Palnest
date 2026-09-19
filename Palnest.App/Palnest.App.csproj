@@ -8,7 +8,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <AssemblyName>Palnest</AssemblyName>
     <Product>Palnest</Product>
     <Description>Palworld Server and Mod Manager</Description>

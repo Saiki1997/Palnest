@@ -1,28 +1,27 @@
-# Palnest 2.0 — Palworld Server & Mod Manager
+# Palnest — Palworld Server & Mod Manager
 
-C# (ASP.NET Core + Blazor) rewrite. One process, no Chromium shell. Background sampling sleeps when no world is live.
+Windows desktop app for dedicated Palworld servers, mods, and worlds.
 
-## Run
+![Palnest dashboard](docs/screenshot.jpg)
 
-```bash
-dotnet run --project Palnest.App --urls http://0.0.0.0:8080
-```
+## Download (Windows)
 
-Windows: `dotnet publish Palnest.App -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`
+- **Installer wizard** — `Palnest-Setup-2.1.0.exe` on the [latest release](https://github.com/Saiki1997/Palnest/releases/latest)
+- **Zip** — `Palnest-2.1.0-windows.zip` (unzip and run Palnest.exe)
+
+## What it does
+
+- Create or import a PalServer world
+- Start / stop PalServer.exe in-app (no extra terminals)
+- Mods: name, id, or store URL → PAK / UE4SS / PalSchema folders
+- Engine.ini presets for heavy worlds and network
+- Players, guilds, kick / ban
+- Background sampling sleeps when nothing is live
+
+Broken packs warn. They do not block start. If PalServer crashes, Palnest names the pack.
 
 ## Tests
 
-```bash
+```
 dotnet test Palnest.Tests
 ```
-
-## What to try
-
-- **Create new server** on the dashboard (header and the dashed card)
-- Import an existing PalServer folder
-- Start / stop — console stays inside Palnest
-- Discover mods (name, id, or store URL) — PAK vs UE4SS vs PalSchema folders
-- Optimize Engine.ini presets
-- Worlds: guilds, kick / ban
-
-Broken mods warn only. If PalServer crashes, Palnest names the pack.

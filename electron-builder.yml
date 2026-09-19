@@ -14,16 +14,19 @@ files:
   - "!electron/**/*.map"
   - "!**/*.md"
 extraResources:
-  - from: .output-desktop
-    to: nitro
+  - from: publish/win-x64
+    to: host
     filter:
       - "**/*"
-      - "!**/*.map"
-      - "!**/*.md"
+      - "!**/*.pdb"
+      - "!**/*.xml"
 win:
   icon: electron/resources/icon.png
   signAndEditExecutable: false
   target:
+    - target: nsis
+      arch:
+        - x64
     - target: zip
       arch:
         - x64
@@ -35,6 +38,7 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Palnest
   deleteAppDataOnUninstall: false
+  installerHeaderIcon: electron/resources/icon.png
   artifactName: Palnest-Setup-${version}.${ext}
 extraMetadata:
   main: electron/main.mjs

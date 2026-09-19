@@ -1,10 +1,10 @@
 {
   "name": "app-builder-workspace",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.1.0",
   "main": "electron/main.mjs",
   "author": "Palnest",
-  "description": "Palworld Server & Mod Manager 2.0.0",
+  "description": "Palworld Server & Mod Manager 2.1.0",
   "sideEffects": false,
   "type": "module",
   "overrides": {
@@ -15,6 +15,7 @@
     "build": "node scripts/run-palnest.mjs --build",
     "typecheck": "node scripts/run-palnest.mjs --build",
     "test": "node scripts/run-palnest.mjs --test",
+    "desktop:pack": "node scripts/build-desktop.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

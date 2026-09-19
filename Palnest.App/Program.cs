@@ -3,7 +3,14 @@ using Palnest.App.Components;
 using Palnest.Core;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.WebHost.UseUrls(Environment.GetEnvironmentVariable("ASPNETCORE_URLS") ?? "http://0.0.0.0:8080");
+var urls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+if (string.IsNullOrWhiteSpace(urls))
+{
+    urls = Environment.GetEnvironmentVariable("PALNEST_DESKTOP") == "1"
+        ? "http://127.0.0.1:47821"
+        : "http://0.0.0.0:8080";
+}
+builder.WebHost.UseUrls(urls);
 builder.Logging.SetMinimumLevel(LogLevel.Warning);
 
 builder.Services.AddRazorComponents()
