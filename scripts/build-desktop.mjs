@@ -22,6 +22,15 @@ function run(cmd, args, env = {}) {
   });
 }
 
+function stripMaps(dir) {
+  if (!fs.existsSync(dir)) return;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) stripMaps(full);
+    else if (entry.name.endsWith(".map")) fs.unlinkSync(full);
+  }
+}
+
 function copyIfExists(from, to) {
   if (!fs.existsSync(from)) return false;
   fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -49,6 +58,9 @@ if (!fs.existsSync(entry)) {
   }
   fs.cpSync(path.join(root, ".output"), outDir, { recursive: true });
 }
+
+stripMaps(outDir);
+console.log("[palnest-desktop] stripped source maps");
 
 console.log("[palnest-desktop] packaging Windows zip…");
 await run("npx", ["electron-builder", "--win", "zip", "--x64", "--config", "electron-builder.yml"], {

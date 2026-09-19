@@ -8,7 +8,7 @@ export function MonitorTicker() {
   useEffect(() => {
     if (mode === "client") return;
     tick();
-    const id = window.setInterval(tick, 4000);
+    const id = window.setInterval(tick, 6000);
     return () => window.clearInterval(id);
   }, [mode, tick]);
 

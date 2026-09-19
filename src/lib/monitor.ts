@@ -1,6 +1,12 @@
 import { formatUptime, timeAgo } from "./utils.ts";
 import type { BackupInfo, WorldInfo, WorldSaveData } from "./types.ts";
 
+export const HOST_RAM_GB = 16;
+
+export function ramFromPct(pct: number) {
+  return Number(((pct / 100) * HOST_RAM_GB).toFixed(1));
+}
+
 export type HistoryRange = "15m" | "1h" | "6h";
 
 export interface MetricSample {

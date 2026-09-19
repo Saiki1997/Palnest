@@ -164,7 +164,7 @@ interface Actions {
 
 export type Store = PalnestState & Actions;
 
-const MAX_LOGS = 200;
+const MAX_LOGS = 80;
 
 function pushLog(logs: LogEntry[], entry: LogInput): LogEntry[] {
   const next: LogEntry = {
@@ -1643,16 +1643,31 @@ export const useAppStore = create<Store>()(
     }),
     {
       name: "palnest-v12",
-      storage: createJSONStorage(() => ({
-        getItem: (name) =>
-          localStorage.getItem(name) ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
-        setItem: (name, value) => localStorage.setItem(name, value),
-        removeItem: (name) => {
-          localStorage.removeItem(name);
-          localStorage.removeItem("palnest-v11");
-          localStorage.removeItem("palnest-v10");
-        },
-      })),
+      storage: createJSONStorage(() => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let pending: { name: string; value: string } | null = null;
+        const flush = () => {
+          if (!pending) return;
+          localStorage.setItem(pending.name, pending.value);
+          pending = null;
+        };
+        return {
+          getItem: (name) =>
+            localStorage.getItem(name) ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
+          setItem: (name, value) => {
+            pending = { name, value };
+            if (timer) clearTimeout(timer);
+            timer = setTimeout(flush, 280);
+          },
+          removeItem: (name) => {
+            if (timer) clearTimeout(timer);
+            pending = null;
+            localStorage.removeItem(name);
+            localStorage.removeItem("palnest-v11");
+            localStorage.removeItem("palnest-v10");
+          },
+        };
+      }),
       skipHydration: true,
       onRehydrateStorage: () => (state) => {
         if (!state) {
@@ -1729,17 +1744,19 @@ export const useAppStore = create<Store>()(
         worldSettings: s.worldSettings,
         worldSaves: s.worldSaves,
         engineTweaks: s.engineTweaks,
-        logs: s.logs,
+        logs: s.logs.slice(0, 80),
         ops: s.ops,
         profiles: s.profiles,
         bans: s.bans,
         allow: s.allow,
-        consoleLines: s.consoleLines,
+        consoleLines: Object.fromEntries(
+          Object.entries(s.consoleLines ?? {}).map(([id, rows]) => [id, rows.slice(-40)]),
+        ),
         denSettings: s.denSettings,
         lastBackupAt: s.lastBackupAt,
         lastRestartDay: s.lastRestartDay,
         monitor: s.monitor
-          ? { session: s.monitor.session, thresholds: s.monitor.thresholds, samples: s.monitor.samples.slice(-240) }
+          ? { session: s.monitor.session, thresholds: s.monitor.thresholds, samples: s.monitor.samples.slice(-120) }
           : undefined,
       }),
     },

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
@@ -14,7 +14,7 @@ import {
   Square,
 } from "lucide-react";
 import { CreateDenDialog } from "@/components/create-den-dialog";
-import { CpuLoadChart, HOST_RAM_GB, RamLoadBar, ramFromPct } from "@/components/dash-charts";
+import { HOST_RAM_GB, ramFromPct } from "@/lib/monitor";
 import { FirewallDialog } from "@/components/firewall-dialog";
 import { ImportServerDialog } from "@/components/import-server-dialog";
 import { DenChecklist } from "@/components/setup-guide";
@@ -28,6 +28,9 @@ import { useAppStore } from "@/lib/store";
 import { cn, formatUptime } from "@/lib/utils";
 import { useMonitorView } from "@/components/world-pulse";
 import type { ServerState } from "@/lib/types";
+
+const CpuLoadChart = lazy(() => import("@/components/dash-charts").then((m) => ({ default: m.CpuLoadChart })));
+const RamLoadBar = lazy(() => import("@/components/dash-charts").then((m) => ({ default: m.RamLoadBar })));
 
 export const Route = createFileRoute("/_app/")({ component: HomePage });
 
@@ -207,8 +210,12 @@ function HomePage() {
           </div>
 
           <div className="mb-4 grid gap-3 lg:grid-cols-2">
-            <CpuLoadChart samples={monitor.samples} live={live > 0} />
-            <RamLoadBar samples={monitor.samples} />
+            <Suspense fallback={<div className="dash-glass h-56 rounded-xl" />}>
+              <CpuLoadChart samples={monitor.samples} live={live > 0} />
+            </Suspense>
+            <Suspense fallback={<div className="dash-glass h-56 rounded-xl" />}>
+              <RamLoadBar samples={monitor.samples} />
+            </Suspense>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

@@ -278,6 +278,19 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
+  build: {
+    target: "es2022",
+    sourcemap: false,
+    cssMinify: true,
+    minify: "esbuild",
+    reportCompressedSize: false,
+    modulePreload: { polyfill: false },
+    assetsInlineLimit: 4096,
+  },
+  esbuild: {
+    legalComments: "none",
+    drop: command === "build" ? ["debugger"] : [],
+  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
@@ -297,6 +310,8 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            sourceMap: false,
+            minify: true,
             ...(process.env.NITRO_OUTPUT ? { output: { dir: process.env.NITRO_OUTPUT } } : {}),
           }),
         ]

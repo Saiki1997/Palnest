@@ -2,24 +2,28 @@ appId: com.palnest.app
 productName: Palnest
 copyright: Palnest
 asar: true
+compression: maximum
+electronLanguages:
+  - en-US
 directories:
   output: dist-desktop
   buildResources: electron/resources
 files:
   - electron/**/*
   - package.json
+  - "!electron/**/*.map"
+  - "!**/*.md"
 extraResources:
   - from: .output-desktop
     to: nitro
     filter:
       - "**/*"
+      - "!**/*.map"
+      - "!**/*.md"
 win:
   icon: electron/resources/icon.png
   signAndEditExecutable: false
   target:
-    - target: nsis
-      arch:
-        - x64
     - target: zip
       arch:
         - x64

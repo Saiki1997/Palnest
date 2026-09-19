@@ -2,8 +2,8 @@
 @import "tw-animate-css";
 
 @theme {
-  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 
   --color-background: #071018;
   --color-foreground: #e8f2f4;
@@ -105,16 +105,16 @@
 }
 
 .glass-panel {
-  background: color-mix(in oklab, var(--color-card) 62%, transparent);
-  backdrop-filter: blur(20px);
+  background: color-mix(in oklab, var(--color-card) 78%, transparent);
+  backdrop-filter: blur(8px);
   box-shadow: var(--shadow-border);
 }
 
 .dash-glass {
-  background: color-mix(in oklab, var(--color-card) 70%, transparent);
-  backdrop-filter: blur(22px);
+  background: color-mix(in oklab, var(--color-card) 82%, transparent);
+  backdrop-filter: blur(8px);
   box-shadow: var(--shadow-border);
-  transition: box-shadow 150ms ease-out;
+  transition: box-shadow 120ms ease-out;
 }
 
 .dash-glass:hover {

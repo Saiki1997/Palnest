@@ -13,6 +13,7 @@ const BACKGROUND = "#0c1110";
 
 app.setName("Palnest");
 app.setAppUserModelId("com.palnest.app");
+app.commandLine.appendSwitch("disable-features", "Translate,MediaRouter,SpareRendererForSitePerProcess");
 
 let mainWindow = null;
 let nitroChild = null;
@@ -50,7 +51,7 @@ function findFreePort(start = 47821) {
   });
 }
 
-function waitForHttp(url, timeoutMs = 90000) {
+function waitForHttp(url, timeoutMs = 20000) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const tick = () => {
@@ -71,7 +72,7 @@ function waitForHttp(url, timeoutMs = 90000) {
         retry();
       });
       req.on("error", retry);
-      req.setTimeout(2000, () => {
+      req.setTimeout(800, () => {
         req.destroy();
         retry();
       });
@@ -81,7 +82,7 @@ function waitForHttp(url, timeoutMs = 90000) {
         reject(new Error(`Palnest took too long to start the local den.${tailHint()}`));
         return;
       }
-      setTimeout(tick, 250);
+      setTimeout(tick, 80);
     };
     tick();
   });
@@ -159,7 +160,8 @@ async function resolveAppUrl() {
   return url;
 }
 
-function createWindow(url) {
+function createWindow() {
+  const splash = path.join(__dirname, "splash.html");
   mainWindow = new BrowserWindow({
     width: 1320,
     height: 860,
@@ -168,18 +170,20 @@ function createWindow(url) {
     title: "Palnest",
     backgroundColor: BACKGROUND,
     autoHideMenuBar: true,
-    show: false,
+    show: true,
     icon: resourceIcon(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: false,
+      v8CacheOptions: "bypassHeatCheck",
+      backgroundThrottling: false,
     },
   });
   Menu.setApplicationMenu(null);
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
-  void mainWindow.loadURL(url);
+  if (fs.existsSync(splash)) void mainWindow.loadFile(splash);
   mainWindow.on("close", (e) => {
     if (process.platform === "win32" && !app.isQuiting && shouldCloseToTray()) {
       e.preventDefault();
@@ -189,6 +193,11 @@ function createWindow(url) {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+}
+
+async function loadApp(url) {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  void mainWindow.loadURL(url);
 }
 
 ipcMain.handle("palnest:pick-folder", async () => {
@@ -312,8 +321,9 @@ if (!gotLock) {
   });
   app.whenReady().then(async () => {
     try {
+      createWindow();
       const url = await resolveAppUrl();
-      createWindow(url);
+      await loadApp(url);
     } catch (err) {
       dialog.showErrorBox("Palnest", err instanceof Error ? err.message : String(err));
       app.quit();

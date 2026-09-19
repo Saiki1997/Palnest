@@ -1,14 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { MetricSample } from "@/lib/monitor";
-import { downsample, filterRange } from "@/lib/monitor";
+import { downsample, filterRange, HOST_RAM_GB, ramFromPct } from "@/lib/monitor";
 import { cn } from "@/lib/utils";
-
-export const HOST_RAM_GB = 16;
-
-export function ramFromPct(pct: number) {
-  return Number(((pct / 100) * HOST_RAM_GB).toFixed(1));
-}
 
 function formatTick(t: number) {
   return new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
