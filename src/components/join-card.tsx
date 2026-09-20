@@ -29,6 +29,7 @@ export function JoinCard({
   const host = joinHost(server);
   const ip = joinIp(server);
   const tunneled = server.tunnel.status === "online";
+  const connect = `-connect=${ip}`;
 
   return (
     <section className={cn("rounded-xl border border-border bg-card p-5", compact && "p-4")}>
@@ -50,6 +51,9 @@ export function JoinCard({
           </Button>
           <Button size="sm" variant="outline" onClick={() => void copy(ip, "IP:port copied")}>
             Copy IP:port
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => void copy(connect, "Launch flag copied")}>
+            Copy -connect
           </Button>
           {onJoinGame ? (
             <Button size="sm" variant="secondary" onClick={onJoinGame}>

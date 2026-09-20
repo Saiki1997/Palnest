@@ -4,6 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import dgram from "node:dgram";
+import net from "node:net";
 
 const pals = new Map();
 const agents = new Map();
@@ -467,10 +468,28 @@ async function detectAgents() {
     }
   }
 
+  async function findOnPath(names) {
+    const bin = win ? "where" : "which";
+    const { execFile } = await import("node:child_process");
+    for (const name of names) {
+      try {
+        const out = await new Promise((resolve) => {
+          execFile(bin, [name], { windowsHide: true }, (err, stdout) =>
+            resolve(err ? "" : String(stdout).trim().split(/\r?\n/).map((l) => l.trim()).find(Boolean) || ""),
+          );
+        });
+        if (out) return out;
+      } catch {
+        /* next */
+      }
+    }
+    return "";
+  }
+
   const playitRun = await runningNames(playitNames);
   const portwarpRun = await runningNames(portwarpNames);
-  const playitPath = playitRun || (await findExe(playitDirs, playitNames));
-  const portwarpPath = portwarpRun || (await findExe(portwarpDirs, portwarpNames));
+  const playitPath = playitRun || (await findExe(playitDirs, playitNames)) || (await findOnPath(playitNames));
+  const portwarpPath = portwarpRun || (await findExe(portwarpDirs, portwarpNames)) || (await findOnPath(portwarpNames));
   return {
     simulated: false,
     playit: {
@@ -486,6 +505,74 @@ async function detectAgents() {
       path: portwarpPath,
     },
   };
+}
+
+function rconPacket(id, type, body) {
+  const str = Buffer.from(String(body ?? ""), "utf8");
+  const payload = Buffer.alloc(8 + str.length + 2);
+  payload.writeInt32LE(id, 0);
+  payload.writeInt32LE(type, 4);
+  str.copy(payload, 8);
+  const size = Buffer.alloc(4);
+  size.writeInt32LE(payload.length, 0);
+  return Buffer.concat([size, payload]);
+}
+
+function takeRconPackets(buf) {
+  const packets = [];
+  let offset = 0;
+  while (offset + 4 <= buf.length) {
+    const size = buf.readInt32LE(offset);
+    if (size < 10 || offset + 4 + size > buf.length) break;
+    const id = buf.readInt32LE(offset + 4);
+    const type = buf.readInt32LE(offset + 8);
+    const body = buf.slice(offset + 12, offset + 4 + size - 2).toString("utf8");
+    packets.push({ id, type, body });
+    offset += 4 + size;
+  }
+  return { packets, rest: buf.slice(offset) };
+}
+
+function rconExec(port, password, command) {
+  return new Promise((resolve) => {
+    const sock = net.connect({ host: "127.0.0.1", port: Number(port) || 25575 });
+    let buf = Buffer.alloc(0);
+    let authed = false;
+    const reqId = 1;
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve({ ok: false, error: "RCON timed out" });
+    }, 8000);
+    sock.on("connect", () => sock.write(rconPacket(reqId, 3, password || "")));
+    sock.on("data", (chunk) => {
+      buf = Buffer.concat([buf, chunk]);
+      const { packets, rest } = takeRconPackets(buf);
+      buf = rest;
+      for (const p of packets) {
+        if (!authed) {
+          if (p.id === -1) {
+            clearTimeout(timer);
+            sock.destroy();
+            resolve({ ok: false, error: "RCON auth failed. Check AdminPassword and RCONEnabled." });
+            return;
+          }
+          if (p.id === reqId) {
+            authed = true;
+            sock.write(rconPacket(reqId + 1, 2, String(command || "")));
+          }
+          continue;
+        }
+        clearTimeout(timer);
+        sock.end();
+        resolve({ ok: true, body: p.body || "(empty)" });
+        return;
+      }
+    });
+    sock.on("error", (err) => {
+      clearTimeout(timer);
+      resolve({ ok: false, error: err.message || "RCON socket error" });
+    });
+  });
 }
 
 export function registerHost(ipcMain, { getWindow, app, Tray, Menu, nativeImage, shell }) {
@@ -514,6 +601,7 @@ export function registerHost(ipcMain, { getWindow, app, Tray, Menu, nativeImage,
   ipcMain.handle("palnest:restore-zip", (_e, zip, dest) => restoreZip(zip, dest));
   ipcMain.handle("palnest:enable-mod", (_e, p, kind, on) => enableMod(p, kind, on));
   ipcMain.handle("palnest:rest", (_e, url, method, body, user, pass) => restCall(url, method, body, user, pass));
+  ipcMain.handle("palnest:rcon", (_e, port, password, command) => rconExec(port, password, command));
   ipcMain.handle("palnest:upnp", (_e, port, on) => upnp(port, on));
   ipcMain.handle("palnest:udp-listen", (_e, port) => udpListen(port));
   ipcMain.handle("palnest:spawn-agent", (_e, kind, argv, cwd) =>

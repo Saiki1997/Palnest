@@ -1,6 +1,7 @@
 {
-  "title": "Palworld Server & Mod Manager",
+  "title": "Palnest",
   "type": "website",
   "card": "custom",
-  "description": "Palworld Server & Mod Manager 1.0.5 — dedicated PalServer, mods, tunnels, and worlds."
+  "color": "4EC9C4",
+  "description": "Palworld Server & Mod Manager"
 }

@@ -1,32 +1,32 @@
 # Palnest — Palworld Server & Mod Manager
 
-Windows desktop app for dedicated Palworld servers, mods, and worlds. **2.2.0**.
-
-![Palnest dashboard](docs/screenshot.jpg)
+Windows desktop app for dedicated Palworld servers, mods, and worlds. **3.0.0**.
 
 ## Download (Windows)
 
-- **Installer wizard** — `Palnest-Setup-2.2.0.exe` on the [latest release](https://github.com/Saiki1997/Palnest/releases/latest)
-- **Zip** — `Palnest-2.2.0-windows.zip` (unzip and run Palnest.exe)
+- **Installer wizard** — `Palnest-Setup-3.0.0.exe` on the [latest release](https://github.com/Saiki1997/Palnest/releases/latest)
+- **Zip** — `Palnest-3.0.0-windows.zip` (unzip and run Palnest.exe)
 
 ## What it does
 
-- **Server only / Client only / Server + client** in Settings
-- Create or import a PalServer world from the dashboard
-- Start / stop PalServer.exe in-app (no extra terminals)
-- Start all / stop all / firewall across the fleet
-- CPU and RAM charts, players (kick / ban), guilds
-- SteamCMD check for later dedicated builds
-- Mods: name, id, or store URL → open the pack, pick a file (PAK vs UE4SS vs PalSchema)
-- Frameworks: UE4SS and PalSchema
-- Tunnels: auto-detect PortWarp and playit.gg
-- Monitor, Optimize (heavy / heavy mods / network), backups every 10 min / 1 h / 6 h / 12 h / 1 day
-- Background sampling sleeps when nothing is live
+- **Server only / Client only / Client + server**
+- Dashboard node cards: start, stop, restart, clone, delete
+- PalServer update check from SteamCMD on the dashboard
+- Players: kick, ban, copy ID, join MOTD (`{player}` / `{world}`), RCON
+- Guilds: add, remove members, delete
+- PalWorldSettings.ini and WorldOption.sav editors with Save
+- Engine.ini tweaks (client / server) with Save
+- Mods: installed / discover / history, Steam, CurseForge, Nexus
+- Frameworks: UE4SS, PalSchema, OptiScaler, ReShade (mode-aware)
+- Tunnels: auto-detect playit.gg and PortWarp, download if missing
+- Worlds and backups, scheduled restart and crash watchdog
+- Export / import Palnest.json
 
-Broken packs warn. They do not block start. If PalServer crashes, Palnest names the pack.
+Broken packs warn. They do not block start.
 
 ## Tests
 
 ```
-dotnet test Palnest.Tests
+npm run typecheck
+node --test src/lib/ops.test.ts src/lib/fleet.test.ts
 ```

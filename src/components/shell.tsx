@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import {
-  Activity,
   Boxes,
   Cable,
   Compass,
@@ -33,20 +32,19 @@ import type { AppMode } from "@/lib/types";
 
 const PRIMARY = [
   { to: "/", key: "home", icon: LayoutGrid, modes: ["client", "server", "both"] as AppMode[] },
-  { to: "/settings", key: "settings", icon: Settings, modes: ["client", "server", "both"] as AppMode[] },
 ];
 
 const TOOLS = [
   { to: "/mods", key: "mods", icon: Boxes, modes: ["client", "server", "both"] as AppMode[] },
-  { to: "/discover", key: "discover", icon: Compass, modes: ["client", "server", "both"] as AppMode[] },
   { to: "/frameworks", key: "frameworks", icon: Puzzle, modes: ["client", "server", "both"] as AppMode[] },
   { to: "/server", key: "server", icon: Server, modes: ["server", "both"] as AppMode[] },
-  { to: "/tunnels", key: "tunnels", icon: Cable, modes: ["server", "both"] as AppMode[] },
-  { to: "/monitor", key: "monitor", icon: Activity, modes: ["server", "both"] as AppMode[] },
   { to: "/worlds", key: "worlds", icon: Globe2, modes: ["server", "both"] as AppMode[] },
   { to: "/optimize", key: "optimize", icon: SlidersHorizontal, modes: ["client", "server", "both"] as AppMode[] },
-  { to: "/checker", key: "checker", icon: ShieldAlert, modes: ["client", "server", "both"] as AppMode[] },
   { to: "/logs", key: "logs", icon: ScrollText, modes: ["client", "server", "both"] as AppMode[] },
+  { to: "/discover", key: "discover", icon: Compass, modes: ["client", "server", "both"] as AppMode[] },
+  { to: "/tunnels", key: "tunnels", icon: Cable, modes: ["server", "both"] as AppMode[] },
+  { to: "/checker", key: "checker", icon: ShieldAlert, modes: ["client", "server", "both"] as AppMode[] },
+  { to: "/settings", key: "settings", icon: Settings, modes: ["client", "server", "both"] as AppMode[] },
 ];
 
 const DISCORD = "https://discord.gg/palworld";
@@ -127,11 +125,9 @@ function SideNav({
       </Link>
 
       <nav className="flex flex-col gap-1">
-        {primary
-          .filter((item) => item.to === "/")
-          .map((item) => (
-            <NavLink key={item.to} to={item.to} label={t(locale, item.key)} icon={item.icon} onClick={onNavigate} />
-          ))}
+        {primary.map((item) => (
+          <NavLink key={item.to} to={item.to} label={t(locale, item.key)} icon={item.icon} onClick={onNavigate} />
+        ))}
         {showServer && onNew ? (
           <button
             type="button"
@@ -142,11 +138,6 @@ function SideNav({
             {t(locale, "newServer")}
           </button>
         ) : null}
-        {primary
-          .filter((item) => item.to !== "/")
-          .map((item) => (
-            <NavLink key={item.to} to={item.to} label={t(locale, item.key)} icon={item.icon} onClick={onNavigate} />
-          ))}
       </nav>
 
       {showServer ? (
@@ -243,7 +234,7 @@ export function Shell() {
     .filter((i) =>
       (mode === "client"
         ? ["/", "/mods", "/discover", "/frameworks", "/checker"]
-        : ["/", "/mods", "/monitor", "/server", "/checker"]
+        : ["/", "/mods", "/worlds", "/server", "/discover"]
       ).includes(i.to),
     )
     .filter((n) => n.modes.includes(mode))

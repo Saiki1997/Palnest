@@ -35,6 +35,7 @@ function box(partial: Partial<ServerState>): ServerState {
     writtenAt: partial.writtenAt ?? null,
     listenAt: partial.listenAt ?? null,
     queryBound: Boolean(partial.queryBound),
+    joinMotd: partial.joinMotd ?? "",
   };
 }
 

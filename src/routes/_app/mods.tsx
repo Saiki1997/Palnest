@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Link2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { FolderScan, toastScanResult } from "@/components/folder-scan";
 import { FileDrop } from "@/components/file-drop";
@@ -18,13 +18,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useAppStore } from "@/lib/store";
+import { mergeFx, parsePastedIni } from "@/lib/fx";
 import { kindLabel, sourceLabel } from "@/lib/paths";
 import { findConflicts, guessZipKind, modExtractDest } from "@/lib/ops";
 import { guessKindFromListing, zipEntryNames } from "@/lib/mod-kind";
-import { extractModZip, steamcmdWorkshop } from "@/lib/runtime";
+import { extractModZip, launchPalworld, steamcmdWorkshop } from "@/lib/runtime";
 import type { ScanFile, ScanResult } from "@/lib/scan";
-import type { InstallTarget, ModKind } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import type { InstallTarget, InstalledMod, ModKind } from "@/lib/types";
+import { cn, formatStamp } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/mods")({ component: ModsPage });
 
@@ -56,6 +57,19 @@ function ModsPage() {
   const [target, setTarget] = useState<"all" | InstallTarget>("all");
   const [profileName, setProfileName] = useState("");
   const [workshopId, setWorkshopId] = useState("");
+  const [pageTab, setPageTab] = useState<"installed" | "history">("installed");
+  const [view, setView] = useState<"list" | "grid" | "compact">("list");
+  const [pendingUninstall, setPendingUninstall] = useState<string | null>(null);
+  const [plan, setPlan] = useState<{ name: string; files: string[]; target: InstallTarget; kind?: ModKind } | null>(null);
+  const [iniImport, setIniImport] = useState("");
+  const fx = mergeFx(useAppStore((s) => s.fx));
+  const identifyFile = useAppStore((s) => s.identifyFile);
+  const dismissUnidentified = useAppStore((s) => s.dismissUnidentified);
+  const addEngineBlock = useAppStore((s) => s.addEngineBlock);
+  const installHit = useAppStore((s) => s.installHit);
+  const server = useAppStore((s) => s.server);
+  const ops = useAppStore((s) => s.ops);
+  const frameworks = useAppStore((s) => s.frameworks);
 
   const filtered = useMemo(() => {
     return [...mods]
@@ -97,6 +111,138 @@ function ModsPage() {
         }
       />
 
+      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+        <button
+          type="button"
+          onClick={() => setPageTab("installed")}
+          className={cn("h-9 rounded-sm px-3 text-sm font-medium", pageTab === "installed" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground")}
+        >
+          Installed
+        </button>
+        <Link
+          to="/discover"
+          className="inline-flex h-9 items-center rounded-sm px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          Discover
+        </Link>
+        <button
+          type="button"
+          onClick={() => setPageTab("history")}
+          className={cn("h-9 rounded-sm px-3 text-sm font-medium", pageTab === "history" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground")}
+        >
+          History
+        </button>
+      </div>
+
+      {pageTab === "history" ? (
+        <section className="rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-3 font-medium">Install history</h2>
+          {fx.history.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nothing installed yet this session.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {fx.history.map((h) => (
+                <li key={h.id} className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium">
+                      {h.name} <Badge variant="outline">{h.action}</Badge>
+                    </p>
+                    <p className="text-sm text-muted-foreground">{h.detail}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{formatStamp(h.at)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {pageTab === "installed" ? (
+        <>
+      <div className="mb-4 rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => {
+              void launchPalworld(paths.client, server, ops?.linuxHost);
+              toast.message("Launching Palworld");
+            }}
+          >
+            <Play className="size-4" />
+            Launch Palworld
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setPlan({ name: "Dropped zip", files: ["enabled.txt", "Scripts/main.lua", "README.md"], target: mode === "server" ? "server" : "client", kind: "ue4ss" })}>
+            Install from file
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!stale}
+            onClick={() => {
+              const n = updateAllMods();
+              toast.success(n ? `Updated ${n} mods` : "Already current");
+            }}
+          >
+            Check for updates{stale ? ` (${stale})` : ""}
+          </Button>
+          <select
+            className="h-9 rounded-sm border border-border bg-background px-2 text-sm"
+            defaultValue=""
+            onChange={(e) => {
+              const id = e.target.value;
+              if (!id) return;
+              const err = applyProfileById(id);
+              if (err) toast.error(err);
+              else toast.success("Loadout applied");
+              e.currentTarget.value = "";
+            }}
+            aria-label="Profiles"
+          >
+            <option value="">Profiles</option>
+            {(profiles ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {frameworks.ue4ss.clientVersion || frameworks.ue4ss.serverVersion
+            ? `UE4SS ${frameworks.ue4ss.clientVersion || frameworks.ue4ss.serverVersion}`
+            : "UE4SS not installed"}
+          {" · "}
+          {frameworks.palschema.clientVersion || frameworks.palschema.serverVersion
+            ? "Pal Schema is installed"
+            : "Pal Schema off"}
+          {" · "}
+          {stale ? `${stale} updates` : "Up to date"}
+        </p>
+      </div>
+      {fx.unidentified.filter((u) => !u.dismissed).length ? (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-card px-4 py-3">
+          <p className="text-sm">
+            {fx.unidentified.filter((u) => !u.dismissed).length} new file in UE4SS Mods — identify?
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                fx.unidentified.filter((u) => !u.dismissed).forEach((u) => identifyFile(u.id));
+                toast.success("Identified as local drops");
+              }}
+            >
+              Identify
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => fx.unidentified.forEach((u) => dismissUnidentified(u.id))}
+            >
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <section className="mb-6 grid gap-4 lg:grid-cols-2">
         <article className="rounded-xl border border-border bg-card p-5">
           <h2 className="font-medium">Loadouts</h2>
@@ -174,23 +320,27 @@ function ModsPage() {
               const diskPath = (file as File & { path?: string }).path;
               void (async () => {
                 let kind = guessZipKind(file.name);
+                let files = [file.name];
                 try {
                   if (file.size < 8_000_000) {
                     const buf = new Uint8Array(await file.arrayBuffer());
                     const listing = zipEntryNames(buf);
-                    if (listing.length) kind = guessKindFromListing(listing, file.name);
+                    if (listing.length) {
+                      kind = guessKindFromListing(listing, file.name);
+                      files = listing.slice(0, 24);
+                    }
                   }
                 } catch {
                   /* filename fallback */
                 }
                 const dest = destRoot ? modExtractDest(destRoot, kind) : "";
                 if (diskPath && dest) void extractModZip(diskPath, dest);
-                log({
-                  level: "ok",
-                  source: "mods",
-                  message: `Extracted ${file.name} as ${kind} into ${dest || "the matching mod folder"}.`,
+                setPlan({
+                  name: file.name.replace(/\.zip$/i, ""),
+                  files,
+                  target: mode === "server" ? "server" : mode === "client" ? "client" : "both",
+                  kind,
                 });
-                toast.success(`Queued ${file.name} as ${kind}`);
               })();
             }}
           />
@@ -259,8 +409,76 @@ function ModsPage() {
           placeholder="Filter by name"
           className="lg:ml-auto lg:max-w-xs"
         />
+        <div className="flex gap-1 rounded-md bg-muted p-1">
+          {(["list", "grid", "compact"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setView(v)}
+              className={cn("h-9 rounded-sm px-3 text-sm capitalize", view === v ? "bg-card text-foreground" : "text-muted-foreground")}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button size="sm" variant="outline">Add to Engine.ini</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add to your Engine.ini</DialogTitle>
+              <DialogDescription>Paste a labelled block. Palnest can reorder or remove it later from Engine tweaks.</DialogDescription>
+            </DialogHeader>
+            <textarea
+              className="min-h-32 w-full rounded-md border border-border bg-background p-2 font-mono text-xs"
+              value={iniImport}
+              onChange={(e) => setIniImport(e.target.value)}
+              placeholder="; Ultimate Engine Tweaks"
+            />
+            <Button
+              onClick={() => {
+                const parsed = parsePastedIni(iniImport);
+                if (!parsed.lines.trim()) {
+                  toast.error("Paste INI first");
+                  return;
+                }
+                addEngineBlock({ name: parsed.name, target: "client", lines: parsed.lines, enabled: true });
+                setIniImport("");
+                toast.success("Queued for Engine.ini — Save on Engine tweaks");
+              }}
+            >
+              Apply to Engine.ini
+            </Button>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {view === "grid" ? (
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          {filtered.map((m) => (
+            <article key={m.id} className="overflow-hidden rounded-xl border border-border bg-card">
+              <img src={m.image || "/palworld-cover.jpg"} alt="" className="aspect-[16/10] w-full object-cover" />
+              <div className="p-3">
+                <p className="line-clamp-2 font-medium">{m.name}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {m.version} · {kindLabel(m.kind)} · {m.target}
+                </p>
+                <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{m.description}</p>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <ModSideSwitches mod={m} mode={mode} setModTarget={setModTarget} toggleMod={toggleMod} />
+                  <Button size="sm" variant="ghost" onClick={() => setPendingUninstall(m.id)}>
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         {filtered.length === 0 ? (
           <div className="px-5 py-12 text-center">
@@ -276,7 +494,7 @@ function ModsPage() {
         ) : (
           <ul className="divide-y divide-border">
             {filtered.map((m, i) => (
-              <li key={m.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center">
+              <li key={m.id} className={cn("flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center", view === "compact" && "py-2")}>
                 <div className="hidden flex-col sm:flex">
                   <Button variant="ghost" size="icon-sm" aria-label="Move up" onClick={() => moveMod(m.id, -1)} disabled={i === 0}>
                     <ChevronUp className="size-4" />
@@ -309,20 +527,8 @@ function ModsPage() {
                     {m.version}
                     {m.version !== m.latestVersion ? ` → ${m.latestVersion}` : ""}
                   </p>
-                  {mode === "both" ? (
-                    <select
-                      className="h-9 rounded-sm border border-border bg-background px-2 text-sm"
-                      value={m.target}
-                      onChange={(e) => setModTarget(m.id, e.target.value as InstallTarget)}
-                      aria-label={`Install target for ${m.name}`}
-                    >
-                      <option value="client">Client</option>
-                      <option value="server">Server</option>
-                      <option value="both">Both</option>
-                    </select>
-                  ) : null}
+                  <ModSideSwitches mod={m} mode={mode} setModTarget={setModTarget} toggleMod={toggleMod} />
                   <div className="flex items-center gap-2">
-                    <Switch checked={m.enabled} onCheckedChange={() => toggleMod(m.id)} aria-label={`Enable ${m.name}`} />
                     {m.version !== m.latestVersion ? (
                       <Button size="sm" variant="outline" onClick={() => { updateMod(m.id); toast.success(`Updated ${m.name}`); }}>
                         Update
@@ -331,10 +537,7 @@ function ModsPage() {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
-                        uninstallMod(m.id);
-                        toast("Removed " + m.name);
-                      }}
+                      onClick={() => setPendingUninstall(m.id)}
                     >
                       Remove
                     </Button>
@@ -345,6 +548,163 @@ function ModsPage() {
           </ul>
         )}
       </div>
+      )}
+
+      <Dialog open={Boolean(pendingUninstall)} onOpenChange={(v) => !v && setPendingUninstall(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Uninstall {mods.find((m) => m.id === pendingUninstall)?.name}?</DialogTitle>
+            <DialogDescription>
+              One confirmation covers the whole set: tracked files they installed are deleted, then empty folders are cleaned up.
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const mod = mods.find((m) => m.id === pendingUninstall);
+            if (!mod) return null;
+            return (
+              <div className="rounded-md border border-danger/40 bg-danger/10 p-3 text-sm">
+                {mod.name} — {mod.fileCount} files — {mod.installPath}
+              </div>
+            );
+          })()}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPendingUninstall(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!pendingUninstall) return;
+                const name = mods.find((m) => m.id === pendingUninstall)?.name;
+                uninstallMod(pendingUninstall);
+                toast.message(`Removed ${name}`);
+                setPendingUninstall(null);
+              }}
+            >
+              Uninstall mod
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(plan)} onOpenChange={(v) => !v && setPlan(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Install plan</DialogTitle>
+            <DialogDescription>Nothing touches disk until you click Install.</DialogDescription>
+          </DialogHeader>
+          {plan ? (
+            <div className="grid gap-3">
+              <p className="text-sm font-medium">Installing {plan.name}: {plan.files.length} files.</p>
+              <div className="flex flex-wrap gap-2">
+                {(["client", "server", "both"] as InstallTarget[]).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setPlan({ ...plan, target: t })}
+                    className={cn("h-9 rounded-sm border px-3 text-sm capitalize", plan.target === t ? "border-primary" : "border-border")}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <ul className="rounded-md border border-border bg-background p-3 font-mono text-xs">
+                {plan.files.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setPlan(null)}>Cancel</Button>
+                <Button
+                  onClick={() => {
+                    const kind = plan.kind ?? guessZipKind(plan.name);
+                    installHit(
+                      {
+                        id: `local-${plan.name}`,
+                        name: plan.name.replace(/\.zip$/i, ""),
+                        author: "Local",
+                        version: "1.0",
+                        source: "local",
+                        sourceId: plan.name,
+                        url: "",
+                        downloads: 0,
+                        description: `Installed from ${plan.name}`,
+                        kind,
+                        updatedAt: new Date().toISOString(),
+                        serverCompatible: true,
+                        gameVersions: [],
+                        requires: [],
+                      },
+                      plan.target,
+                    );
+                    log({ level: "ok", source: "mods", message: `Install plan applied for ${plan.name} → ${plan.target}.` });
+                    toast.success(`Installed ${plan.name} on ${plan.target}`);
+                    setPlan(null);
+                  }}
+                >
+                  Install
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ModSideSwitches({
+  mod,
+  mode,
+  setModTarget,
+  toggleMod,
+}: {
+  mod: InstalledMod;
+  mode: "client" | "server" | "both";
+  setModTarget: (id: string, target: InstallTarget) => void;
+  toggleMod: (id: string) => void;
+}) {
+  const showClient = mode !== "server";
+  const showServer = mode !== "client";
+  const clientOn = mod.enabled && (mod.target === "client" || mod.target === "both");
+  const serverOn = mod.enabled && (mod.target === "server" || mod.target === "both");
+
+  function apply(side: "client" | "server", on: boolean) {
+    const nextClient = side === "client" ? on : clientOn;
+    const nextServer = side === "server" ? on : serverOn;
+    if (nextClient && nextServer) {
+      setModTarget(mod.id, "both");
+      if (!mod.enabled) toggleMod(mod.id);
+    } else if (nextClient) {
+      setModTarget(mod.id, "client");
+      if (!mod.enabled) toggleMod(mod.id);
+    } else if (nextServer) {
+      setModTarget(mod.id, "server");
+      if (!mod.enabled) toggleMod(mod.id);
+    } else if (mod.enabled) {
+      toggleMod(mod.id);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {showClient ? (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Client
+          <Switch checked={clientOn} onCheckedChange={(v) => apply("client", v)} aria-label={`${mod.name} on client`} />
+        </label>
+      ) : null}
+      {showClient && showServer ? (
+        <Link2 className={cn("size-3.5", clientOn && serverOn ? "text-primary" : "text-muted-foreground/40")} />
+      ) : null}
+      {showServer ? (
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          Server
+          <Switch checked={serverOn} onCheckedChange={(v) => apply("server", v)} aria-label={`${mod.name} on server`} />
+        </label>
+      ) : null}
     </div>
   );
 }

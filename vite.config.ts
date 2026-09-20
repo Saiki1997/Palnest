@@ -1,4 +1,4 @@
-import { readdirSync, createReadStream, existsSync, statSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
@@ -10,7 +10,10 @@ import { nitro } from "nitro/vite";
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
+// @ts-expect-error JS plugin alongside the TS vite config
+import { desktopArtifactsPlugin } from "./scripts/desktop-artifacts-plugin.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
+
 
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
@@ -142,124 +145,6 @@ function authPopupPlugin(): Plugin {
   };
 }
 
-function findDesktopZip(root: string) {
-  const dir = join(root, "dist-desktop");
-  const named = [join(dir, "Palnest-windows.zip"), join(root, "artifacts", "Palnest-windows.zip")];
-  const direct = named.find((p) => existsSync(p));
-  if (direct) return direct;
-  if (!existsSync(dir)) return null;
-  const found = readdirSync(dir).find((f) => f.endsWith(".zip") && /win/i.test(f));
-  return found ? join(dir, found) : null;
-}
-
-function findDesktopSetup(root: string) {
-  const dir = join(root, "dist-desktop");
-  const named = [
-    join(dir, "Palnest-Setup-1.0.0.exe"),
-    join(dir, "Palnest-Setup.exe"),
-    join(root, "artifacts", "Palnest-Setup.exe"),
-    join(dir, "Palnest-Setup.zip"),
-    join(root, "artifacts", "Palnest-Setup.zip"),
-  ];
-  const direct = named.find((p) => existsSync(p));
-  if (direct) return direct;
-  if (existsSync(dir)) {
-    const exe = readdirSync(dir).find((f) => /\.exe$/i.test(f) && /setup/i.test(f));
-    if (exe) return join(dir, exe);
-  }
-  return findDesktopZip(root);
-}
-
-function palnestDesktopDownloadPlugin(): Plugin {
-  function attach(
-    root: string,
-    req: { url?: string; method?: string; headers?: { range?: string; Range?: string } },
-    res: {
-      statusCode: number;
-      setHeader: (k: string, v: string) => void;
-      end: (s?: string) => void;
-    },
-    next: () => void,
-  ) {
-    const url = (req.url ?? "").split("?")[0];
-    if (url === "/downloads/palnest-windows-status") {
-      res.statusCode = 200;
-      res.setHeader("content-type", "application/json; charset=utf-8");
-      res.setHeader("cache-control", "no-store");
-      res.end(JSON.stringify({ available: Boolean(findDesktopZip(root) || findDesktopSetup(root)) }));
-      return;
-    }
-    const isSetup = url === "/downloads/palnest-setup";
-    const isZip = url === "/downloads/palnest-windows";
-    if (!isSetup && !isZip) {
-      next();
-      return;
-    }
-    const file = isSetup ? findDesktopSetup(root) : findDesktopZip(root);
-    if (!file) {
-      res.statusCode = 404;
-      res.setHeader("content-type", "text/plain; charset=utf-8");
-      res.end(isSetup ? "Windows installer is not built yet." : "Windows zip is not built yet.");
-      return;
-    }
-    const stat = statSync(file);
-    const isExe = file.toLowerCase().endsWith(".exe");
-    const filename = isSetup ? (isExe ? "Palnest-Setup.exe" : "Palnest-Setup.zip") : "Palnest-windows.zip";
-    const mime = isExe ? "application/vnd.microsoft.portable-executable" : "application/zip";
-    const size = stat.size;
-    const rangeHeader = req.headers?.range || req.headers?.Range || "";
-    const match = String(rangeHeader).match(/bytes=(\d*)-(\d*)/i);
-    let start = 0;
-    let end = size - 1;
-    let status = 200;
-    if (match) {
-      if (match[1]) start = Number(match[1]);
-      if (match[2]) end = Number(match[2]);
-      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || end >= size) {
-        res.statusCode = 416;
-        res.setHeader("content-range", `bytes */${size}`);
-        res.end();
-        return;
-      }
-      status = 206;
-    }
-    const length = end - start + 1;
-    res.statusCode = status;
-    res.setHeader("content-type", mime);
-    res.setHeader("content-length", String(length));
-    res.setHeader("accept-ranges", "bytes");
-    res.setHeader(
-      "content-disposition",
-      `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    );
-    res.setHeader("cache-control", "no-store");
-    res.setHeader("x-content-type-options", "nosniff");
-    if (status === 206) res.setHeader("content-range", `bytes ${start}-${end}/${size}`);
-    if ((req.method ?? "GET").toUpperCase() === "HEAD") {
-      res.end();
-      return;
-    }
-    const stream = createReadStream(file, { start, end });
-    stream.on("error", () => {
-      if (!("headersSent" in res) || !(res as { headersSent?: boolean }).headersSent) {
-        res.statusCode = 500;
-        res.end("download failed");
-      }
-    });
-    stream.pipe(res as unknown as NodeJS.WritableStream);
-  }
-
-  return {
-    name: "palnest-desktop-download",
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => attach(server.config.root, req, res, next));
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use((req, res, next) => attach(server.config.root, req, res, next));
-    },
-  };
-}
-
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
@@ -268,9 +153,6 @@ export default defineConfig(({ command, isPreview }) => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
-    headers: {
-      "Cache-Control": "no-store, no-cache, must-revalidate",
-    },
   },
   preview: {
     host: "127.0.0.1",
@@ -278,14 +160,6 @@ export default defineConfig(({ command, isPreview }) => ({
     strictPort: true,
   },
   resolve: { tsconfigPaths: true },
-  build: {
-    target: "es2022",
-    sourcemap: false,
-    cssMinify: true,
-    reportCompressedSize: false,
-    modulePreload: { polyfill: false },
-    assetsInlineLimit: 4096,
-  },
   plugins: [
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
@@ -294,20 +168,17 @@ export default defineConfig(({ command, isPreview }) => ({
     appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
-    palnestDesktopDownloadPlugin(),
+    desktopArtifactsPlugin(),
     tailwindcss(),
     tanstackStart(),
     ...(command === "build" || isPreview
       ? [
           nitro({
-            preset: process.env.NITRO_PRESET || "vercel",
+            preset: "vercel",
             // Auto-registers server/middleware/* (the PWA install page +
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
-            sourceMap: false,
-            minify: true,
-            ...(process.env.NITRO_OUTPUT ? { output: { dir: process.env.NITRO_OUTPUT } } : {}),
           }),
         ]
       : []),

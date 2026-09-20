@@ -13,18 +13,25 @@ files:
   - package.json
   - "!electron/**/*.map"
   - "!**/*.md"
+  - "!node_modules/**"
+npmRebuild: false
+nodeGypRebuild: false
 extraResources:
-  - from: publish/win-x64
+  - from: desktop-host
     to: host
     filter:
       - "**/*"
-      - "!**/*.pdb"
-      - "!**/*.xml"
+extraFiles:
+  - from: electron/resources/README.txt
+    to: README.txt
+  - from: electron/resources/LICENSE.txt
+    to: LICENSE.txt
 win:
   icon: electron/resources/icon.png
   signAndEditExecutable: false
+  requestedExecutionLevel: asInvoker
   target:
-    - target: nsis
+    - target: dir
       arch:
         - x64
     - target: zip
@@ -33,13 +40,22 @@ win:
   artifactName: Palnest-${version}-windows.${ext}
 nsis:
   oneClick: false
+  perMachine: false
+  allowElevation: true
   allowToChangeInstallationDirectory: true
-  createDesktopShortcut: always
+  createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: Palnest
   deleteAppDataOnUninstall: false
-  installerHeaderIcon: electron/resources/icon.png
+  installerHeaderIcon: electron/resources/icon.ico
+  installerIcon: electron/resources/icon.ico
+  uninstallerIcon: electron/resources/icon.ico
+  installerSidebar: electron/resources/wizard/sidebar.bmp
+  license: electron/resources/LICENSE.txt
+  include: electron/installer-extra.nsh
   artifactName: Palnest-Setup-${version}.${ext}
+  runAfterFinish: true
+  menuCategory: Palnest
 extraMetadata:
   main: electron/main.mjs
 electronVersion: 35.5.1

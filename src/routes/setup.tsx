@@ -104,7 +104,7 @@ export function SetupPage() {
             <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">Set up the desktop client</h1>
             <p className="mt-2 max-w-xl text-sm text-muted-foreground">
               Click through the numbered steps. Client only is the Palworld game. Server only is PalServer. You can add
-              Palnest.exe from the Windows zip when you want a real window and folder Browse.
+              Palnest.exe from the Windows installer or portable zip when you want a real window and folder Browse.
             </p>
           </div>
         </div>

@@ -6,6 +6,25 @@ export type ModSource = "nexus" | "steam" | "curseforge" | "github" | "local";
 
 export type InstallTarget = "client" | "server" | "both";
 
+export type DiscoverPeriod = "all" | "1d" | "7d" | "14d" | "28d" | "1y" | "custom";
+
+export type DiscoverSort =
+  | "published"
+  | "endorsements"
+  | "downloads"
+  | "unique"
+  | "updated"
+  | "name"
+  | "size"
+  | "comment"
+  | "surprise";
+
+export interface DiscoverCategory {
+  name: string;
+  count: number;
+  id?: string;
+}
+
 export interface ModFileChoice {
   id: string;
   name: string;
@@ -13,6 +32,10 @@ export interface ModFileChoice {
   kind: ModKind;
   note: string;
   url?: string;
+  version?: string;
+  category?: string;
+  uploadedAt?: string;
+  primary?: boolean;
 }
 
 export type FindingSeverity = "error" | "warn" | "info";
@@ -73,6 +96,7 @@ export interface InstalledMod {
   sizeKb: number;
   installedAt: string;
   updatedAt: string;
+  image?: string;
   broken?: boolean;
   notes?: string;
 }
@@ -105,6 +129,8 @@ export interface WorldInfo {
   sizeMb: number;
   guilds: number;
   optionOverride?: boolean;
+  loadoutId?: string;
+  created?: boolean;
 }
 
 export interface SavePlayer {
@@ -125,6 +151,7 @@ export interface SaveGuild {
   name: string;
   owner: string;
   members: number;
+  memberIds?: string[];
   bases: number;
 }
 
@@ -216,6 +243,7 @@ export interface EngineTweak {
 export interface PlayerInfo {
   name: string;
   playerId: string;
+  userId?: string;
   level: number;
   ping: number;
   location: string;
@@ -261,7 +289,30 @@ export interface SearchHit {
   gameVersions: string[];
   requires: string[];
   files?: ModFileChoice[];
+  body?: string;
+  category?: string;
+  endorsements?: number;
+  image?: string;
+  cachedAt?: string;
+  publishedAt?: string;
+  uniqueDownloads?: number;
+  sizeKb?: number;
+  lastComment?: string;
+  tags?: string[];
 }
+
+export type DiscoverSource = "all" | "nexus" | "steam" | "curseforge";
+
+export interface ModCacheBucket {
+  query: string;
+  hits: SearchHit[];
+  live: boolean;
+  note: string;
+  fetchedAt: string;
+}
+
+export type ModCacheState = Partial<Record<DiscoverSource, ModCacheBucket>>;
+
 
 export type TunnelProvider = "none" | "playit" | "portwarp";
 
@@ -322,6 +373,8 @@ export interface ServerState {
   listenAt: string | null;
   /** Steam query is listening as UDP (not TCP). PortWarp extra maps only then. */
   queryBound: boolean;
+  /** Broadcast when a player joins. {player} and {world} are replaced. Empty = off. */
+  joinMotd: string;
 }
 
 export interface PathsState {

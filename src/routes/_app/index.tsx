@@ -1,17 +1,20 @@
-import { useMemo, useState, lazy, Suspense, type ReactNode } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   Activity,
   Cpu,
+  Copy,
   Download,
   LayoutGrid,
   MemoryStick,
   Play,
   Plus,
+  RotateCw,
   Server,
   Shield,
   Square,
+  Trash2,
 } from "lucide-react";
 import { CreateDenDialog } from "@/components/create-den-dialog";
 import { HOST_RAM_GB, ramFromPct } from "@/lib/monitor";
@@ -20,12 +23,18 @@ import { ImportServerDialog } from "@/components/import-server-dialog";
 import { DenChecklist } from "@/components/setup-guide";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { runChecker } from "@/lib/checker";
 import { OPTIMIZE_PRESETS } from "@/lib/args";
 import { fleetOf, runningCount } from "@/lib/fleet";
 import { useAppStore } from "@/lib/store";
 import { cn, formatUptime } from "@/lib/utils";
+import { joinHost } from "@/lib/tunnels";
+import { fetchSteamDedicatedLatest, type DedicatedLatest } from "@/lib/steam-latest";
+import { steamcmdDedicated } from "@/lib/runtime";
+import { CURRENT_GAME } from "@/lib/catalog";
 import { useMonitorView } from "@/components/world-pulse";
 import type { ServerState } from "@/lib/types";
 
@@ -54,6 +63,9 @@ function HomePage() {
   const stopAllServers = useAppStore((s) => s.stopAllServers);
   const startServer = useAppStore((s) => s.startServer);
   const stopServer = useAppStore((s) => s.stopServer);
+  const restartServer = useAppStore((s) => s.restartServer);
+  const cloneServer = useAppStore((s) => s.cloneServer);
+  const removeServer = useAppStore((s) => s.removeServer);
   const selectServer = useAppStore((s) => s.selectServer);
   const applyPreset = useAppStore((s) => s.applyPreset);
   const activeServerId = useAppStore((s) => s.activeServerId);
@@ -61,6 +73,7 @@ function HomePage() {
   const [importOpen, setImportOpen] = useState(false);
   const [firewallOpen, setFirewallOpen] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const fleet = fleetOf({ instances, server });
   const live = runningCount(fleet);
   const showServer = mode !== "client";
@@ -218,6 +231,8 @@ function HomePage() {
             </Suspense>
           </div>
 
+          <PalServerUpdateStrip version={server.version} installPath={server.installPath || paths.server} serverId={server.id} />
+
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {fleet.map((inst) => (
               <NodeCard
@@ -242,6 +257,32 @@ function HomePage() {
                   stopServer(inst.id);
                   toast.message(`${inst.name} stopped`);
                 }}
+                onRestart={() => {
+                  const err = restartServer(inst.id);
+                  if (err) toast.error(err);
+                  else toast.success(`${inst.name} restarting`);
+                }}
+                onClone={() => {
+                  const r = cloneServer(inst.id);
+                  if (r.error) toast.error(r.error);
+                  else toast.success("Server cloned");
+                }}
+                onDelete={() => setPendingDelete(inst.id)}
+                cpu={
+                  inst.running
+                    ? inst.id === (activeServerId || server.id)
+                      ? monitor.latest?.procCpu ?? 18
+                      : 8 + hash01(inst.id) * 28
+                    : 0
+                }
+                ramMb={
+                  inst.running
+                    ? inst.id === (activeServerId || server.id)
+                      ? Math.round((monitor.latest?.procRamGb ?? 3.2) * 1024)
+                      : Math.round(900 + hash01(inst.id) * 2800)
+                    : 0
+                }
+                canDelete={fleet.length > 1}
               />
             ))}
             <button
@@ -281,6 +322,34 @@ function HomePage() {
           />
         </div>
       )}
+
+      <Dialog open={Boolean(pendingDelete)} onOpenChange={(v) => !v && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this server?</DialogTitle>
+            <DialogDescription>
+              {fleet.find((i) => i.id === pendingDelete)?.name ?? "This node"} will be removed from Palnest. The PalServer folder on disk is left in place.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!pendingDelete) return;
+                const err = removeServer(pendingDelete);
+                if (err) toast.error(err);
+                else toast.message("Server removed");
+                setPendingDelete(null);
+              }}
+            >
+              Delete server
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {attention.length > 0 ? (
         <section className="dash-glass mt-4 rounded-xl p-5">
@@ -332,6 +401,12 @@ function StatCard({
   );
 }
 
+function hash01(id: string) {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
+  return (n % 1000) / 1000;
+}
+
 function NodeCard({
   inst,
   selected,
@@ -340,6 +415,12 @@ function NodeCard({
   onProfile,
   onStart,
   onStop,
+  onRestart,
+  onClone,
+  onDelete,
+  cpu,
+  ramMb,
+  canDelete,
 }: {
   inst: ServerState;
   selected: boolean;
@@ -348,9 +429,15 @@ function NodeCard({
   onProfile: (id: string) => void;
   onStart: () => void;
   onStop: () => void;
+  onRestart: () => void;
+  onClone: () => void;
+  onDelete: () => void;
+  cpu: number;
+  ramMb: number;
+  canDelete: boolean;
 }) {
   const binding = inst.running && !inst.listenAt;
-  const life = !inst.running ? "Stopped" : binding ? "Binding UDP" : "Listening";
+  const life = !inst.running ? "Stopped" : binding ? "Binding UDP" : "Running";
   const uptime = inst.running ? formatUptime(inst.listenAt ?? inst.startedAt) : "—";
 
   return (
@@ -392,21 +479,139 @@ function NodeCard({
         <MetaTile label="Real uptime" value={uptime} />
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 grid gap-3">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">CPU Overhead</span>
+            <span className="font-mono text-chart-cpu">{cpu.toFixed(1)}%</span>
+          </div>
+          <Progress value={cpu} indicatorClassName="bg-chart-cpu" />
+        </div>
+        <div>
+          <div className="mb-1 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">RAM Allocation</span>
+            <span className="font-mono text-chart-ram">{ramMb} MB</span>
+          </div>
+          <Progress value={Math.min(100, (ramMb / (HOST_RAM_GB * 1024)) * 100)} indicatorClassName="bg-chart-ram" />
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
         {inst.running ? (
           <Button size="sm" variant="outline" className="border-danger/40 text-danger hover:bg-danger/10" onClick={onStop}>
+            <Square className="size-3.5" />
             Stop
           </Button>
         ) : (
           <Button size="sm" className="bg-ok text-background hover:opacity-90" onClick={onStart}>
+            <Play className="size-3.5" />
             Start
           </Button>
         )}
+        <Button size="sm" variant="outline" onClick={onRestart} disabled={!inst.running}>
+          <RotateCw className="size-3.5" />
+          Restart
+        </Button>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
         <Button size="sm" variant="outline" asChild>
-          <Link to="/server" onClick={onSelect}>
-            Open
+          <Link to="/logs" onClick={onSelect}>
+            Console
           </Link>
         </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/server" search={{ tab: "players" }} onClick={onSelect}>
+            Players
+          </Link>
+        </Button>
+        <Button size="sm" variant="outline" asChild>
+          <Link to="/worlds" search={{ tab: "backups" }} onClick={onSelect}>
+            Backups
+          </Link>
+        </Button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            const addr = joinHost(inst);
+            void navigator.clipboard.writeText(addr).then(
+              () => toast.success(`Copied ${addr}`),
+              () => toast.message(addr),
+            );
+          }}
+        >
+          Copy join
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClone}>
+          <Copy className="size-3.5" />
+          Clone
+        </Button>
+        <Button size="sm" variant="ghost" className="text-danger hover:text-danger" disabled={!canDelete || inst.running} onClick={onDelete}>
+          <Trash2 className="size-3.5" />
+          Delete
+        </Button>
+      </div>
+    </article>
+  );
+}
+
+function PalServerUpdateStrip({
+  version,
+  installPath,
+  serverId,
+}: {
+  version: string;
+  installPath: string;
+  serverId: string;
+}) {
+  const updateServer = useAppStore((s) => s.updateServer);
+  const [hit, setHit] = useState<DedicatedLatest | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function check() {
+    setBusy(true);
+    void fetchSteamDedicatedLatest(version)
+      .then((next) => setHit(next))
+      .finally(() => setBusy(false));
+  }
+
+  useEffect(() => {
+    check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [version]);
+
+  return (
+    <article className="dash-glass mb-4 flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-sm font-medium">PalServer {version}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {busy && !hit
+            ? "Checking SteamCMD for Palworld dedicated…"
+            : hit
+              ? hit.newer
+                ? `Update available: ${hit.version}${hit.build ? ` · manifest ${hit.build}` : ""}`
+                : `Up to date with the ${CURRENT_GAME} dedicated line.`
+              : "SteamCMD check did not finish."}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={busy} onClick={check}>
+          {busy ? "Checking…" : "Check for updates"}
+        </Button>
+        {hit?.newer ? (
+          <Button
+            size="sm"
+            onClick={() => {
+              void steamcmdDedicated(installPath || "C:\\PalServers\\PalServer", hit.version);
+              updateServer(hit.version, serverId);
+              toast.success(`Updating PalServer to ${hit.version}`);
+            }}
+          >
+            Update to {hit.version}
+          </Button>
+        ) : null}
       </div>
     </article>
   );

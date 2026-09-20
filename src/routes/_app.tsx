@@ -16,6 +16,10 @@ function AppLayout() {
 
 function Gate() {
   const onboarded = useAppStore((s) => s.onboarded);
+  const hydrateReady = useAppStore((s) => s.hydrateReady);
+  if (!hydrateReady) {
+    return <div className="min-h-dvh bg-background" aria-busy="true" />;
+  }
   if (onboarded) return <Shell />;
   return <SetupPage />;
 }

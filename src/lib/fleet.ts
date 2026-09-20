@@ -128,6 +128,7 @@ export function normalizeInstance(raw: Partial<ServerState>, versions: ServerVer
     writtenAt: raw.writtenAt ?? null,
     listenAt: raw.listenAt ?? null,
     queryBound: Boolean(raw.queryBound),
+    joinMotd: raw.joinMotd || "",
   };
 }
 
@@ -241,15 +242,6 @@ export function instanceExe(instance: ServerState, fallbackRoot: string) {
   return `${root}\\PalServer.exe`;
 }
 
-export function instanceShippingExe(instance: ServerState, fallbackRoot: string) {
-  const root = (instance.installPath || fallbackRoot || "%SERVER%").replace(/[\\/]$/, "");
-  return `${root}\\Pal\\Binaries\\Win64\\PalServer-Win64-Shipping.exe`;
-}
-
 export function runningCount(instances: ServerState[]) {
   return instances.filter((i) => i.running).length;
-}
-
-export function onlinePlayers(instances: ServerState[]) {
-  return instances.reduce((n, i) => n + i.players.filter((p) => p.online).length, 0);
 }

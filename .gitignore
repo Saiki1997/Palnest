@@ -13,3 +13,7 @@ artifacts/*.zip
 artifacts/*.exe
 .env
 .vercel
+desktop-host/
+.tanstack/
+.grok/
+screenshots/

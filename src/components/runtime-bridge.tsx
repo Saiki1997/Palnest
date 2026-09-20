@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { fleetOf, patchInstance } from "@/lib/fleet";
-import { backupDue, crashLine, defaultOps, dueSchedule, pruneBackups, webhookPayload } from "@/lib/ops";
+import { backupDue, crashLine, defaultOps, dueAnySchedule, dueIntervalRestart, formatJoinMotd, pruneBackups, webhookPayload } from "@/lib/ops";
 import { backupIntervalLabel, resolveBackupMinutes } from "@/lib/backup";
 import { hostAutostart, hostDetectAgents, hostKind, hostMetrics, hostNotify, postWebhook } from "@/lib/host";
 import {
@@ -15,6 +15,8 @@ import {
 } from "@/lib/listen";
 import { overlayHost } from "@/lib/monitor";
 import { blameCrash } from "@/lib/crash-blame";
+import { composeEngineIni, mergeFx } from "@/lib/fx";
+import { tweaksToIni } from "@/lib/args";
 import {
   enableModOnDisk,
   mapUpnp,
@@ -68,6 +70,26 @@ export function RuntimeBridge() {
   const backupInit = useRef(false);
   const prevBackup = useRef<string | null>(null);
   const scheduleBusy = useRef(false);
+  const recoveries = useRef<Record<string, number[]>>({});
+
+  function denWritePayload(inst: typeof server) {
+    const merged = mergeFx(useAppStore.getState().fx);
+    return {
+      engineIni: merged.engineIniServer || composeEngineIni({
+        tweaksIni: tweaksToIni(engineTweaks, "server"),
+        blocks: merged.engineBlocks,
+        target: "server",
+        uiScale: merged.uiScale,
+      }),
+      clientEngineIni: merged.engineIniClient || composeEngineIni({
+        tweaksIni: tweaksToIni(engineTweaks, "client"),
+        blocks: merged.engineBlocks,
+        target: "client",
+        uiScale: merged.uiScale,
+      }),
+      inst,
+    };
+  }
 
   useEffect(() => {
     const locale = ops?.locale ?? "en";
@@ -160,6 +182,8 @@ export function RuntimeBridge() {
             allow: allow ?? [],
             linux: ops?.linuxHost,
             engineTweaks,
+            engineIni: denWritePayload(inst).engineIni,
+            clientEngineIni: denWritePayload(inst).clientEngineIni,
           });
           const spawned = await spawnDenProcess(inst, launchArgs, paths, ops?.linuxHost);
           if (spawned.pid) patchServer(inst.id, { pid: spawned.pid });
@@ -204,6 +228,8 @@ export function RuntimeBridge() {
           allow: allow ?? [],
           linux: ops?.linuxHost,
           engineTweaks,
+          engineIni: denWritePayload(inst).engineIni,
+          clientEngineIni: denWritePayload(inst).clientEngineIni,
         });
       }
     }
@@ -331,6 +357,10 @@ export function RuntimeBridge() {
     const fleet = fleetOf({ instances, server });
     for (const inst of fleet) {
       const ids = inst.players.filter((p) => p.online).map((p) => p.playerId);
+      if (!Object.prototype.hasOwnProperty.call(prevPlayers.current, inst.id)) {
+        prevPlayers.current[inst.id] = ids;
+        continue;
+      }
       const prev = prevPlayers.current[inst.id] ?? [];
       for (const id of ids) {
         if (!prev.includes(id)) {
@@ -338,6 +368,12 @@ export function RuntimeBridge() {
           const text = `${p?.name || id} joined ${inst.name}`;
           if (ops?.webhook) void postWebhook(ops.webhook, webhookPayload("join", text));
           void hostNotify(`${p?.name || id} joined`, inst.name);
+          const motd = formatJoinMotd(inst.joinMotd || "", p?.name || "wanderer", inst.name);
+          if (motd) {
+            void restAnnounce(inst, worldSettings, motd);
+            useAppStore.getState().announce(motd, inst.id);
+            pushConsole(inst.id, `[MOTD] ${motd}`);
+          }
         }
       }
       for (const id of prev) {
@@ -347,7 +383,7 @@ export function RuntimeBridge() {
       }
       prevPlayers.current[inst.id] = ids;
     }
-  }, [instances, ops?.webhook, server]);
+  }, [instances, ops?.webhook, pushConsole, server, worldSettings]);
 
   useEffect(() => {
     if (!hydrateReady) return;
@@ -393,27 +429,47 @@ export function RuntimeBridge() {
         }));
       }
 
-      if (
+      const restartTimes =
+        flags.scheduleRestartTimes?.length
+          ? flags.scheduleRestartTimes
+          : flags.scheduleRestart
+            ? [flags.scheduleRestart]
+            : [];
+      const timesDue =
         flags.scheduleRestartOn &&
-        flags.scheduleRestart &&
-        dueSchedule(flags.scheduleRestart, new Date(), s.lastRestartDay) &&
-        running.length
-      ) {
+        flags.scheduleRestartMode !== "interval" &&
+        dueAnySchedule(restartTimes, new Date(), s.lastRestartDay);
+      const earliestStart = running.map((i) => i.startedAt).filter(Boolean).sort()[0] ?? s.server.startedAt;
+      const intervalDue =
+        flags.scheduleRestartOn &&
+        flags.scheduleRestartMode === "interval" &&
+        dueIntervalRestart(flags.scheduleRestartHours || 6, earliestStart);
+      if ((timesDue || intervalDue) && running.length) {
+        const stamp = new Date();
+        const hhmm = `${String(stamp.getHours()).padStart(2, "0")}:${String(stamp.getMinutes()).padStart(2, "0")}`;
         scheduleBusy.current = true;
-        useAppStore.setState({ lastRestartDay: new Date().toISOString().slice(0, 10) });
+        useAppStore.setState({ lastRestartDay: `${stamp.toISOString().slice(0, 10)}|${hhmm}` });
+        const label = restartTimes[0] || flags.scheduleRestart || "interval";
         log({
           level: "warn",
           source: "schedule",
-          message: `Daily restart ${flags.scheduleRestart} — broadcasting, then cycling worlds.`,
+          message: `Scheduled restart ${label} — warning, then cycling worlds.`,
         });
-        for (const inst of running) {
-          void restAnnounce(inst, s.worldSettings, "Scheduled restart in 30 seconds.");
-          pushConsole(inst.id, "[PALNEST] Scheduled restart broadcast sent");
-        }
+        const ids = running.map((i) => i.id);
+        const warn = (sec: number) => {
+          const live = fleetOf(useAppStore.getState()).filter((i) => ids.includes(i.id));
+          for (const inst of live) {
+            void restAnnounce(inst, useAppStore.getState().worldSettings, `Scheduled restart in ${sec} seconds.`);
+            pushConsole(inst.id, `[PALNEST] Scheduled restart in ${sec}s`);
+          }
+        };
+        warn(30);
+        window.setTimeout(() => warn(15), 15000);
+        window.setTimeout(() => warn(5), 25000);
         window.setTimeout(() => {
-          for (const inst of running) restartServer(inst.id);
+          for (const id of ids) restartServer(id);
           scheduleBusy.current = false;
-        }, 4000);
+        }, 30000);
       }
     }, 20000);
     return () => window.clearInterval(id);
@@ -431,6 +487,18 @@ export function RuntimeBridge() {
           if (desktop) {
             const m = await hostMetrics(inst.id);
             if (crashWatchdog && !m.running) {
+              const now = Date.now();
+              const rec = (recoveries.current[inst.id] ?? []).filter((t) => now - t < 60 * 60 * 1000);
+              if (rec.length >= 3) {
+                log({
+                  level: "error",
+                  source: "watchdog",
+                  message: `${inst.name} crashed 3 times in an hour. Watchdog stopped restarting it.`,
+                });
+                stopServer(inst.id);
+                return;
+              }
+              recoveries.current[inst.id] = [...rec, now];
               restarting.current.add(inst.id);
               pushConsole(inst.id, crashLine(), "err");
               const snap = useAppStore.getState();

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld("palnestDesktop", {
   restoreZip: (zip, dest) => ipcRenderer.invoke("palnest:restore-zip", zip, dest),
   enableMod: (path, kind, on) => ipcRenderer.invoke("palnest:enable-mod", path, kind, on),
   rest: (url, method, body, user, pass) => ipcRenderer.invoke("palnest:rest", url, method, body, user, pass),
+  rcon: (port, password, command) => ipcRenderer.invoke("palnest:rcon", port, password, command),
   upnp: (port, on) => ipcRenderer.invoke("palnest:upnp", port, on),
   spawnAgent: (kind, argv, cwd) => ipcRenderer.invoke("palnest:spawn-agent", kind, argv, cwd),
   stopAgent: (kind) => ipcRenderer.invoke("palnest:stop-agent", kind),

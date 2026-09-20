@@ -1,5 +1,6 @@
 import type { ScanFile } from "./scan";
 import type { AgentScan } from "./agents";
+import { APP_VERSION } from "./version";
 
 export type HostListen = { bound: boolean; transport: "udp" | "tcp" | "none"; simulated?: boolean };
 export type HostMetrics = { cpu: number; ramMb: number; running: boolean };
@@ -24,6 +25,7 @@ export type PalnestDesktopApi = {
   restoreZip?: (zip: string, dest: string) => Promise<HostWrite>;
   enableMod?: (path: string, kind: string, on: boolean) => Promise<HostWrite>;
   rest?: (url: string, method: string, body?: unknown, user?: string, pass?: string) => Promise<{ ok: boolean; status: number; body?: unknown; error?: string }>;
+  rcon?: (port: number, password: string, command: string) => Promise<{ ok: boolean; body?: string; error?: string; simulated?: boolean }>;
   upnp?: (port: number, on: boolean) => Promise<HostWrite>;
   spawnAgent?: (kind: "playit" | "portwarp", argv: string[], cwd?: string) => Promise<HostSpawn>;
   stopAgent?: (kind: "playit" | "portwarp") => Promise<boolean>;
@@ -61,5 +63,8 @@ export async function revealPath(target: string) {
   return window.palnestDesktop.openPath(target);
 }
 
-export const WINDOWS_APP_HREF = "/downloads/palnest-windows";
-export const WINDOWS_SETUP_HREF = "/downloads/palnest-setup";
+export const WINDOWS_SETUP_FILENAME = `Palnest-Setup-${APP_VERSION}.exe`;
+export const WINDOWS_APP_FILENAME = `Palnest-${APP_VERSION}-windows.zip`;
+export const WINDOWS_SETUP_HREF = `/desktop/${WINDOWS_SETUP_FILENAME}`;
+export const WINDOWS_APP_HREF = `/desktop/${WINDOWS_APP_FILENAME}`;
+export const WINDOWS_RELEASES_HREF = "https://github.com/Saiki1997/Palnest/releases/latest";

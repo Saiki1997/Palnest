@@ -6,6 +6,10 @@ import { PathField } from "@/components/path-field";
 import { StatusPips, useFleet } from "@/components/fleet-bar";
 import { ImportServerDialog } from "@/components/import-server-dialog";
 import { JoinCard } from "@/components/join-card";
+import { IniEditorPanel } from "@/components/ini-editor";
+import { ServerOpsPanel } from "@/components/server-ops";
+import { GuildPanel } from "@/components/guild-panel";
+import { SaveBar } from "@/components/save-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,22 +29,35 @@ import { renderCommandLine } from "@/lib/args";
 import { downloadText } from "@/lib/download";
 import { DEPOT_PINS } from "@/lib/ops";
 import { fetchSteamDedicatedLatest, type DedicatedLatest } from "@/lib/steam-latest";
-import { launchPalworld, linuxScriptDownload, restAnnounce, restKick, restSave, steamcmdDedicated } from "@/lib/runtime";
+import { launchPalworld, linuxScriptDownload, restAnnounce, restBan, restKick, restSave, restUnban, sendRcon, steamcmdDedicated } from "@/lib/runtime";
 import { useAppStore } from "@/lib/store";
 import { cn, formatStamp, formatUptime } from "@/lib/utils";
 
-export const Route = createFileRoute("/_app/server")({ component: ServerPage });
+type ServerTab = "settings" | "ops" | "players" | "guilds" | "instance";
+
+export const Route = createFileRoute("/_app/server")({
+  validateSearch: (s: Record<string, unknown>): { tab: ServerTab } => ({
+    tab:
+      s.tab === "settings" || s.tab === "players" || s.tab === "guilds" || s.tab === "instance" || s.tab === "ops"
+        ? s.tab
+        : "ops",
+  }),
+  component: ServerPage,
+});
 
 function ServerPage() {
   const mode = useAppStore((s) => s.mode);
   const { fleet, activeId } = useFleet();
   const server = fleet.find((i) => i.id === activeId) ?? fleet[0];
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const startServer = useAppStore((s) => s.startServer);
   const stopServer = useAppStore((s) => s.stopServer);
   const restartServer = useAppStore((s) => s.restartServer);
   const updateServer = useAppStore((s) => s.updateServer);
   const rollbackServer = useAppStore((s) => s.rollbackServer);
   const createServer = useAppStore((s) => s.createServer);
+  const cloneServer = useAppStore((s) => s.cloneServer);
   const removeServer = useAppStore((s) => s.removeServer);
   const selectServer = useAppStore((s) => s.selectServer);
   const startAllServers = useAppStore((s) => s.startAllServers);
@@ -79,6 +96,8 @@ function ServerPage() {
   const [allowText, setAllowText] = useState(allow.join("\n"));
   const [steamLatest, setSteamLatest] = useState<DedicatedLatest | null>(null);
   const [steamBusy, setSteamBusy] = useState(false);
+  const frameworks = useAppStore((s) => s.frameworks);
+  const mods = useAppStore((s) => s.mods);
 
   if (mode === "client") return <Navigate to="/" />;
   if (!server) return null;
@@ -251,6 +270,111 @@ function ServerPage() {
         </Button>
       </div>
 
+      <div className="mb-4 flex flex-wrap gap-2">
+        {fleet.map((inst) => (
+          <button
+            key={inst.id}
+            type="button"
+            onClick={() => selectServer(inst.id)}
+            className={cn(
+              "inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm",
+              inst.id === server.id ? "border-primary bg-card" : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
+            )}
+          >
+            <span className={cn("size-2 rounded-full", inst.running ? "bg-ok" : "bg-muted-foreground/40")} />
+            {inst.name}
+          </button>
+        ))}
+      </div>
+
+      <section className="mb-5 overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn("size-2 rounded-full", frameworks.ue4ss.serverVersion ? "bg-ok" : "bg-muted-foreground/50")} />
+            <p className="text-sm">
+              {frameworks.ue4ss.serverVersion ? "Server UE4SS is installed" : "Server UE4SS is not installed"}
+            </p>
+            {frameworks.ue4ss.serverVersion ? <Badge variant="outline">{frameworks.ue4ss.serverVersion}</Badge> : null}
+            <Badge variant="outline">PALWORLD BUILD</Badge>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <Link to="/settings" className="text-muted-foreground hover:text-foreground">
+              Config
+            </Link>
+            <Link to="/worlds" search={{ tab: "list" }} className="text-muted-foreground hover:text-foreground">
+              Worlds
+            </Link>
+            <Link to="/worlds" search={{ tab: "backups" }} className="text-muted-foreground hover:text-foreground">
+              Backups
+            </Link>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => void navigate({ search: { tab: "instance" } })}
+            >
+              Server
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+          <span className={cn("size-2 rounded-full", frameworks.palschema.serverVersion ? "bg-ok" : "bg-muted-foreground/50")} />
+          <p className="text-sm">
+            {frameworks.palschema.serverVersion ? "Pal Schema is installed" : "Pal Schema is not installed"}
+            <span className="ml-2 text-muted-foreground">
+              {mods.filter((m) => m.kind === "palschema").length} schema mods loaded
+            </span>
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2">
+          <span className="size-2 rounded-full bg-ok" />
+          <p className="text-sm">
+            Official mod system is on
+            <span className="ml-2 text-muted-foreground">
+              {mods.filter((m) => m.kind === "pak").length
+                ? `${mods.filter((m) => m.kind === "pak").length} packages`
+                : "no packages listed"}
+            </span>
+          </p>
+        </div>
+      </section>
+
+      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+        {(
+          [
+            ["settings", "Settings"],
+            ["ops", "Ops"],
+            ["players", "Players"],
+            ["guilds", "Guilds"],
+            ["instance", "Instance"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => void navigate({ search: { tab: id } })}
+            className={cn(
+              "h-9 rounded-sm px-3 text-sm font-medium",
+              tab === id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "settings" ? <IniEditorPanel /> : null}
+      {tab === "ops" ? <ServerOpsPanel /> : null}
+      {tab === "guilds" ? <GuildPanel /> : null}
+      {tab === "players" ? (
+        <PlayersTab
+          server={server}
+          kick={kick}
+          banPlayer={banPlayer}
+          settings={settings}
+        />
+      ) : null}
+      {tab === "instance" ? (
+        <>
       <div className="mb-6 grid gap-3 lg:grid-cols-2">
         {fleet.map((inst) => {
           const bound = worlds.find((w) => w.id === inst.worldId);
@@ -284,15 +408,27 @@ function ServerPage() {
                     Start
                   </Button>
                 )}
-                <Button size="sm" variant="secondary" onClick={() => {
-                  const err = restartServer(inst.id);
-                  if (err) toast.error(err);
-                  else toast.success("Restarted");
-                }}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    const err = restartServer(inst.id);
+                    if (err) toast.error(err);
+                    else toast.success("Restarted");
+                  }}
+                >
                   Restart
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => selectServer(inst.id)}>
-                  Select
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    const r = cloneServer(inst.id);
+                    if (r.error) toast.error(r.error);
+                    else toast.success("Cloned");
+                  }}
+                >
+                  Clone
                 </Button>
                 {fleet.length > 1 ? (
                   <Button
@@ -312,7 +448,6 @@ function ServerPage() {
           );
         })}
       </div>
-
       <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Info label="Selected" value={server.running ? (server.listenAt ? formatUptime(server.startedAt) : "Binding UDP") : "Stopped"} hint={server.name} />
         <Info label="Version" value={server.version} hint={`Build ${server.build}`} />
@@ -356,58 +491,6 @@ function ServerPage() {
           Publish to the community list
         </label>
         <p className="mb-4 break-all font-mono text-xs text-muted-foreground">{cmd}</p>
-        {server.players.length ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs tracking-wide text-muted-foreground uppercase">
-                <tr>
-                  <th className="py-2 font-medium">Player</th>
-                  <th className="py-2 font-medium">Lvl</th>
-                  <th className="py-2 font-medium">Ping</th>
-                  <th className="py-2 font-medium">Where</th>
-                  <th className="py-2 font-medium">Guild</th>
-                  <th className="py-2 font-medium"> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {server.players.map((p) => (
-                  <tr key={p.playerId} className="border-t border-border">
-                    <td className="py-2">{p.name}</td>
-                    <td className="py-2 font-mono tabular-nums">{p.level}</td>
-                    <td className="py-2 font-mono tabular-nums">{p.ping}</td>
-                    <td className="py-2 text-muted-foreground">{p.location}</td>
-                    <td className="py-2 text-muted-foreground">{p.guild}</td>
-                    <td className="py-2 text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          void restKick(server, settings, p.playerId);
-                          kick(p.playerId, server.id);
-                          toast.message(`Kicked ${p.name}`);
-                        }}
-                      >
-                        Kick
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          banPlayer(p.playerId, server.id, "Banned from Server");
-                          toast.message(`Banned ${p.name}`);
-                        }}
-                      >
-                        Ban
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">No one in this world. Start it to open the island.</p>
-        )}
         <div className="mt-4 flex flex-wrap gap-2">
           <Button
             size="sm"
@@ -534,8 +617,16 @@ function ServerPage() {
                 <span className="ml-2 font-mono text-xs text-muted-foreground">{b.steamId}</span>
                 <span className="ml-2 text-muted-foreground">{b.reason}</span>
               </span>
-              <Button size="sm" variant="ghost" onClick={() => removeBan(b.id)}>
-                Remove
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  void restUnban(server, settings, b.steamId);
+                  removeBan(b.id);
+                  toast.success(`Unbanned ${b.name || b.steamId}`);
+                }}
+              >
+                Unban
               </Button>
             </li>
           ))}
@@ -666,7 +757,234 @@ function ServerPage() {
           </p>
         </div>
       </section>
+        </>
+      ) : null}
     </div>
+  );
+}
+
+function PlayersTab({
+  server,
+  kick,
+  banPlayer,
+  settings,
+}: {
+  server: ReturnType<typeof useAppStore.getState>["server"];
+  kick: (playerId: string, serverId?: string) => void;
+  banPlayer: (playerId: string, serverId?: string, reason?: string) => void;
+  settings: ReturnType<typeof useAppStore.getState>["worldSettings"];
+}) {
+  const announce = useAppStore((s) => s.announce);
+  const patchServer = useAppStore((s) => s.patchServer);
+  const [q, setQ] = useState("");
+  const [msg, setMsg] = useState("");
+  const [motd, setMotd] = useState(server.joinMotd || "");
+  const [rconCmd, setRconCmd] = useState("");
+  const [rconOut, setRconOut] = useState("");
+  const [rconBusy, setRconBusy] = useState(false);
+  const online = server.players.filter((p) => p.online);
+  const filtered = server.players.filter((p) => {
+    if (!q.trim()) return true;
+    const s = q.toLowerCase();
+    return p.name.toLowerCase().includes(s) || p.guild.toLowerCase().includes(s) || p.playerId.toLowerCase().includes(s);
+  });
+  const rconOn = settings.find((s) => s.key === "RCONEnabled")?.value === "True";
+  const motdDirty = motd !== (server.joinMotd || "");
+
+  useEffect(() => {
+    setMotd(server.joinMotd || "");
+  }, [server.id, server.joinMotd]);
+
+  async function runRcon(cmd: string) {
+    const next = cmd.trim();
+    if (!next) return;
+    setRconBusy(true);
+    try {
+      const res = await sendRcon(server, settings, next);
+      if (!res.ok) {
+        setRconOut(res.error || "RCON failed");
+        toast.error(res.error || "RCON failed");
+      } else {
+        setRconOut(res.body || "(ok)");
+        toast.success(res.simulated ? "RCON previewed" : "RCON sent");
+      }
+    } finally {
+      setRconBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="font-medium">Players</h2>
+          <p className="text-sm text-muted-foreground">
+            {online.length}/{server.maxPlayers} online. Kick drops them now. Ban hits REST and writes SteamID64 to banlist.txt.
+          </p>
+        </div>
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search players" className="lg:max-w-xs" />
+      </div>
+
+      <div className="mb-4 rounded-lg border border-border bg-background p-4">
+        <Label htmlFor="join-motd">Join MOTD</Label>
+        <p className="mt-1 mb-2 text-sm text-muted-foreground">
+          Broadcast when someone connects. Use {"{player}"} and {"{world}"}. Leave empty to skip.
+        </p>
+        <Textarea
+          id="join-motd"
+          value={motd}
+          onChange={(e) => setMotd(e.target.value)}
+          placeholder="Welcome {player} to {world}."
+          className="min-h-20"
+        />
+        <SaveBar
+          dirty={motdDirty}
+          onSave={() => {
+            const err = patchServer(server.id, { joinMotd: motd });
+            if (err) toast.error(err);
+            else toast.success("Saved join MOTD");
+          }}
+          onDiscard={() => setMotd(server.joinMotd || "")}
+          hint="MOTD is not live until you save."
+        />
+      </div>
+
+      <form
+        className="mb-4 flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!msg.trim()) return;
+          void restAnnounce(server, settings, msg.trim());
+          announce(msg.trim(), server.id);
+          toast.success("Announcement sent");
+          setMsg("");
+        }}
+      >
+        <Input value={msg} onChange={(e) => setMsg(e.target.value)} placeholder="Broadcast to the server" className="flex-1" />
+        <Button type="submit" variant="outline">
+          Announce
+        </Button>
+      </form>
+
+      <div className="mb-4 rounded-lg border border-border bg-background p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="font-medium">RCON</p>
+            <p className="text-sm text-muted-foreground">
+              TCP {server.rconPort}
+              {rconOn ? "" : " · RCONEnabled is off — turn it on in Settings to talk to PalServer.exe"}
+              . Use this when REST is down. Info, ShowPlayers, Save, Broadcast, KickPlayer.
+            </p>
+          </div>
+          <Badge variant={rconOn ? "ok" : "outline"}>{rconOn ? "Enabled" : "Off in INI"}</Badge>
+        </div>
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runRcon(rconCmd);
+          }}
+        >
+          <Input
+            value={rconCmd}
+            onChange={(e) => setRconCmd(e.target.value)}
+            placeholder="Broadcast Hello from Palnest"
+            className="flex-1 font-mono text-sm"
+          />
+          <Button type="submit" disabled={rconBusy}>
+            {rconBusy ? "Sending…" : "Send"}
+          </Button>
+        </form>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {["Info", "ShowPlayers", "Save"].map((cmd) => (
+            <Button key={cmd} size="sm" variant="outline" disabled={rconBusy} onClick={() => void runRcon(cmd)}>
+              {cmd}
+            </Button>
+          ))}
+        </div>
+        {rconOut ? (
+          <pre className="mt-3 max-h-40 overflow-auto rounded-md bg-muted p-3 font-mono text-xs whitespace-pre-wrap">{rconOut}</pre>
+        ) : null}
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          {server.players.length === 0 ? "No one is in this world." : "No players match that search."}
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-xs tracking-wide text-muted-foreground uppercase">
+              <tr>
+                <th className="py-2 font-medium">Player</th>
+                <th className="py-2 font-medium">Lvl</th>
+                <th className="py-2 font-medium">Ping</th>
+                <th className="py-2 font-medium">Where</th>
+                <th className="py-2 font-medium">Guild</th>
+                <th className="py-2 font-medium"> </th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((p) => (
+                <tr key={p.playerId} className="border-t border-border">
+                  <td className="py-2">
+                    <p>{p.name}</p>
+                    <p className="font-mono text-xs text-muted-foreground">{p.playerId}</p>
+                    {p.userId && p.userId !== p.playerId ? (
+                      <p className="font-mono text-xs text-muted-foreground">{p.userId}</p>
+                    ) : null}
+                  </td>
+                  <td className="py-2 font-mono tabular-nums">{p.level}</td>
+                  <td className="py-2 font-mono tabular-nums">{p.ping}</td>
+                  <td className="py-2 text-muted-foreground">{p.location}</td>
+                  <td className="py-2 text-muted-foreground">{p.guild || "—"}</td>
+                  <td className="py-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const id = p.userId || p.playerId;
+                          void navigator.clipboard.writeText(id).then(
+                            () => toast.success("Copied Steam / user id"),
+                            () => toast.message(id),
+                          );
+                        }}
+                      >
+                        Copy ID
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!p.online}
+                        onClick={() => {
+                          void restKick(server, settings, p.playerId);
+                          kick(p.playerId, server.id);
+                          toast.message(`Kicked ${p.name}`);
+                        }}
+                      >
+                        Kick
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          void restBan(server, settings, p.userId || p.playerId);
+                          banPlayer(p.playerId, server.id, "Banned from Players tab");
+                          toast.message(`Banned ${p.name}`);
+                        }}
+                      >
+                        Ban
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

@@ -3,16 +3,18 @@ import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FileDrop } from "@/components/file-drop";
 import { ImportServerDialog } from "@/components/import-server-dialog";
+import { IniEditorPanel } from "@/components/ini-editor";
 import { PageHeader } from "@/components/page-header";
 import { SettingsFields } from "@/components/settings-fields";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { downloadBytes, downloadText, readFileBytes, readFileText, saveBytes, saveText } from "@/lib/download";
-import { editedCount, isEdited, parseOptionSettings, settingsToIni } from "@/lib/ini";
+import { editedCount, isEdited, parseOptionSettings } from "@/lib/ini";
 import {
   encodeLevelMetaSav,
   encodeWorldOptionSav,
@@ -28,26 +30,26 @@ import { buildWorldFilePack } from "@/lib/world-pack";
 import { useAppStore } from "@/lib/store";
 import { restoreSavedZip } from "@/lib/runtime";
 import type { SaveGuild, SavePlayer, WorldSnapshot } from "@/lib/types";
-import { cn, formatStamp, nid, timeAgo } from "@/lib/utils";
+import { cn, formatStamp, nid } from "@/lib/utils";
 
-type Tab = "list" | "ini" | "sav";
+type Tab = "list" | "backups" | "ini" | "sav";
 
 export const Route = createFileRoute("/_app/worlds")({
   validateSearch: (s: Record<string, unknown>): { tab: Tab } => ({
-    tab: s.tab === "ini" || s.tab === "sav" ? s.tab : "list",
+    tab: s.tab === "ini" || s.tab === "sav" || s.tab === "backups" ? s.tab : "list",
   }),
   component: WorldsPage,
 });
 
 function WorldsPage() {
   const mode = useAppStore((s) => s.mode);
-  const search = Route.useSearch();
-  const nextTab: Tab = search.tab === "ini" || search.tab === "sav" ? search.tab : "list";
-  const [tab, setTab] = useState<Tab>(nextTab);
+  const { tab } = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [importOpen, setImportOpen] = useState(false);
-  useEffect(() => {
-    setTab(nextTab);
-  }, [nextTab]);
+
+  function setTab(id: Tab) {
+    void navigate({ search: { tab: id } });
+  }
 
   if (mode === "client") return <Navigate to="/" />;
 
@@ -67,6 +69,7 @@ function WorldsPage() {
         {(
           [
             ["list", "Worlds"],
+            ["backups", "Backups"],
             ["ini", "PalWorldSettings.ini"],
             ["sav", "World.sav"],
           ] as const
@@ -85,7 +88,8 @@ function WorldsPage() {
         ))}
       </div>
       {tab === "list" ? <WorldList /> : null}
-      {tab === "ini" ? <IniEditor onOpenSav={() => setTab("sav")} /> : null}
+      {tab === "backups" ? <BackupList /> : null}
+      {tab === "ini" ? <IniEditorPanel /> : null}
       {tab === "sav" ? <SavEditor onOpenIni={() => setTab("ini")} /> : null}
     </div>
   );
@@ -193,16 +197,195 @@ function WorldList() {
   const worlds = useAppStore((s) => s.worlds);
   const backups = useAppStore((s) => s.backups);
   const worldSaves = useAppStore((s) => s.worldSaves);
+  const instances = useAppStore((s) => s.instances);
+  const server = useAppStore((s) => s.server);
   const switchWorld = useAppStore((s) => s.switchWorld);
+  const cloneWorld = useAppStore((s) => s.cloneWorld);
+  const deleteWorld = useAppStore((s) => s.deleteWorld);
+  const createWorld = useAppStore((s) => s.createWorld);
   const createBackup = useAppStore((s) => s.createBackup);
   const restoreBackup = useAppStore((s) => s.restoreBackup);
   const autoBackup = useAppStore((s) => s.autoBackup);
   const patchWorld = useAppStore((s) => s.patchWorld);
+  const applyProfileById = useAppStore((s) => s.applyProfileById);
+  const profiles = useAppStore((s) => s.profiles);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+
+  const pending = worlds.find((w) => w.id === pendingDelete);
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-        <WorldFileBar />
+      <Dialog open={newOpen} onOpenChange={setNewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New world</DialogTitle>
+            <DialogDescription>Creates a Saved world. Bind it to a PalServer from Server when you want it live.</DialogDescription>
+          </DialogHeader>
+          <label className="grid gap-2 text-sm">
+            World name
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Sunreach" />
+          </label>
+          <Button
+            onClick={() => {
+              const created = createWorld(newName.trim() || "New world");
+              toast.success("World created");
+              setNewName("");
+              setNewOpen(false);
+              void created;
+            }}
+          >
+            Create world
+          </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(pending)} onOpenChange={(v) => !v && setPendingDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {pending?.name}?</DialogTitle>
+            <DialogDescription>
+              Removes this Saved world from Palnest. PalServer using it must be stopped. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" onClick={() => setPendingDelete(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                if (!pending) return;
+                const err = deleteWorld(pending.id);
+                if (err) toast.error(err);
+                else toast.success(`${pending.name} deleted`);
+                setPendingDelete(null);
+              }}
+            >
+              Delete world
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+        <Button variant="outline" onClick={() => toast.message("Opens the backups folder on Palnest.exe")}>
+          Open backups folder
+        </Button>
+        <Button onClick={() => setNewOpen(true)}>New world</Button>
+      </div>
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        {worlds.length === 0 ? (
+          <p className="px-4 py-10 text-center text-sm text-muted-foreground">No worlds yet. Import a server or start a new dedicated install.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {worlds.map((w) => {
+              const save = worldSaves[w.id];
+              const bound = [server, ...instances].find((i) => i.worldId === w.id);
+              const chars = save?.players.length ?? 0;
+              return (
+                <li key={w.id} className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-center">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="font-medium">{w.name}</h2>
+                      {w.active ? <Badge variant="ok">Active</Badge> : null}
+                      {save?.optionOverride || w.optionOverride ? <Badge variant="outline">Settings saved</Badge> : null}
+                      {w.created === false ? <Badge variant="warn">Not created yet</Badge> : null}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {formatStamp(w.lastPlayed)} · {w.sizeMb} MB · {chars} character{chars === 1 ? "" : "s"}
+                    </p>
+                    <label className="mt-2 inline-flex items-center gap-2 text-sm">
+                      Mod loadout
+                      <select
+                        className="h-9 rounded-sm border border-border bg-background px-2 text-sm"
+                        value={w.loadoutId || ""}
+                        onChange={(e) => {
+                          const id = e.target.value;
+                          patchWorld(w.id, { loadoutId: id || undefined });
+                          if (id) {
+                            const err = applyProfileById(id);
+                            if (err) toast.error(err);
+                            else toast.success("Loadout applied");
+                          }
+                        }}
+                      >
+                        <option value="">(no mod loadout)</option>
+                        {(profiles ?? []).map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!w.active ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          switchWorld(w.id);
+                          toast("Active world switched");
+                        }}
+                      >
+                        Activate
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        createBackup("manual", `Backup ${w.name}`);
+                        toast.success("World snapshot saved");
+                      }}
+                    >
+                      Back up now
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const cloned = cloneWorld(w.id);
+                        if (cloned.error) toast.error(cloned.error);
+                        else toast.success(`Cloned ${w.name}`);
+                      }}
+                    >
+                      Clone
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-danger"
+                      disabled={Boolean(bound?.running)}
+                      onClick={() => setPendingDelete(w.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BackupList() {
+  const backups = useAppStore((s) => s.backups);
+  const restoreBackup = useAppStore((s) => s.restoreBackup);
+  const createBackup = useAppStore((s) => s.createBackup);
+  const autoBackup = useAppStore((s) => s.autoBackup);
+  const server = useAppStore((s) => s.server);
+  const paths = useAppStore((s) => s.paths);
+  return (
+    <section className="rounded-xl border border-border bg-card p-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-medium">Backups</h2>
+          <p className="text-sm text-muted-foreground">{autoBackup ? "Scheduled snapshots + last 7 kept" : "Auto off"}</p>
+        </div>
         <Button
           variant="outline"
           onClick={() => {
@@ -210,338 +393,41 @@ function WorldList() {
             toast.success("World snapshot saved");
           }}
         >
-          Snapshot active world
+          Back up now
         </Button>
       </div>
-      <div className="mb-6 grid gap-3 md:grid-cols-2">
-        {worlds.map((w) => {
-          const save = worldSaves[w.id];
-          return (
-            <article key={w.id} className="rounded-xl border border-border bg-card p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h2 className="font-medium">{w.name}</h2>
-                  <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{w.guid}</p>
-                </div>
-                {w.active ? <Badge variant="ok">Active</Badge> : <Badge variant="outline">Idle</Badge>}
+      {backups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No snapshots yet.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {backups.map((b) => (
+            <li key={b.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium">
+                  {b.label} <span className="text-muted-foreground">· {b.worldName}</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatStamp(b.createdAt)} · {b.sizeMb} MB · game {b.version} · {b.kind}
+                </p>
               </div>
-              <label className="mt-4 block text-xs text-muted-foreground">
-                World name
-                <Input
-                  aria-label="World name"
-                  value={w.name}
-                  onChange={(e) => patchWorld(w.id, { name: e.target.value })}
-                  className="mt-1"
-                />
-              </label>
-              <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Days</dt>
-                  <dd>
-                    <Input
-                      type="number"
-                      min={0}
-                      className="mt-1 h-10 font-mono tabular-nums"
-                      value={w.days}
-                      onChange={(e) => patchWorld(w.id, { days: Number(e.target.value) || 0 })}
-                    />
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Size</dt>
-                  <dd className="mt-2 font-mono tabular-nums">{w.sizeMb} MB</dd>
-                </div>
-                <div>
-                  <dt className="text-muted-foreground">Guilds</dt>
-                  <dd className="mt-2 font-mono tabular-nums">{save?.guilds.length ?? w.guilds}</dd>
-                </div>
-              </dl>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {save?.optionOverride || w.optionOverride ? (
-                  <Badge variant="warn">WorldOption.sav overrides INI</Badge>
-                ) : (
-                  <Badge variant="outline">INI applies</Badge>
-                )}
-                <p className="text-xs text-muted-foreground">Last played {timeAgo(w.lastPlayed)}</p>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {!w.active ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      switchWorld(w.id);
-                      toast("Active world switched");
-                    }}
-                  >
-                    Make active
-                  </Button>
-                ) : null}
-                <Button size="sm" variant="ghost" asChild>
-                  <Link to="/worlds" search={{ tab: "ini" }}>
-                    Edit INI
-                  </Link>
-                </Button>
-                <Button size="sm" variant="ghost" asChild>
-                  <Link to="/worlds" search={{ tab: "sav" }}>
-                    Edit World.sav
-                  </Link>
-                </Button>
-              </div>
-            </article>
-          );
-        })}
-        {worlds.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No worlds yet. Import a server or start a new dedicated install.</p>
-        ) : null}
-      </div>
-
-      <section className="rounded-xl border border-border bg-card p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-medium">Backups</h2>
-          <p className="text-xs text-muted-foreground">{autoBackup ? "Scheduled snapshots + last 7 kept" : "Auto off"}</p>
-        </div>
-        {backups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No snapshots yet.</p>
-        ) : (
-          <ul className="divide-y divide-border">
-            {backups.map((b) => (
-              <li key={b.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium">
-                    {b.label} <span className="text-muted-foreground">· {b.worldName}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatStamp(b.createdAt)} · {b.sizeMb} MB · game {b.version} · {b.kind}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    restoreBackup(b.id);
-                    if (b.zipPath) {
-                      const st = useAppStore.getState();
-                      void restoreSavedZip(b.zipPath, st.server, st.paths);
-                    }
-                    toast.success(b.zipPath ? "Restored Pal\\Saved from zip. Server stopped." : "World restored. Server stopped.");
-                  }}
-                >
-                  Restore
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-}
-
-function IniEditor({ onOpenSav }: { onOpenSav: () => void }) {
-  const settings = useAppStore((s) => s.worldSettings);
-  const paths = useAppStore((s) => s.paths);
-  const worlds = useAppStore((s) => s.worlds);
-  const worldSaves = useAppStore((s) => s.worldSaves);
-  const setWorldSetting = useAppStore((s) => s.setWorldSetting);
-  const importIni = useAppStore((s) => s.importIni);
-  const resetWorldSettings = useAppStore((s) => s.resetWorldSettings);
-  const applySavImport = useAppStore((s) => s.applySavImport);
-  const [query, setQuery] = useState("");
-  const [paste, setPaste] = useState("");
-  const [mode, setMode] = useState<"form" | "source">("form");
-  const [source, setSource] = useState("");
-  const [sourceDirty, setSourceDirty] = useState(false);
-  const active = worlds.find((w) => w.active);
-  const save = active ? worldSaves[active.id] : undefined;
-  const edited = editedCount(settings);
-  const preview = useMemo(() => settingsToIni(settings), [settings]);
-
-  useEffect(() => {
-    if (!sourceDirty) setSource(preview);
-  }, [preview, sourceDirty]);
-
-  async function onUpload(file: File) {
-    const lower = file.name.toLowerCase();
-    if (lower.endsWith(".sav")) {
-      if (!active) {
-        toast.error("Create or import a world first.");
-        return;
-      }
-      const bytes = await readFileBytes(file);
-      const report = await inspectSav(bytes, file.name);
-      const n = applySavImport(active.id, {
-        fileName: file.name,
-        size: file.size,
-        settings: report.settings,
-        kind: report.kind,
-        note: report.note,
-        meta: report.meta,
-      });
-      toast.success(`Read ${file.name}${n ? ` · ${n} keys` : ""}`);
-      return;
-    }
-    const text = await readFileText(file);
-    const n = importIni(text);
-    setSourceDirty(false);
-    toast.success(`Imported ${n} keys from ${file.name}`);
-  }
-
-  return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(280px,0.8fr)]">
-      <section className="rounded-xl border border-border bg-card p-5">
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="font-medium">PalWorldSettings.ini</h2>
-            <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{iniPath(paths.server)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline">{edited} edited</Badge>
-            <div className="flex rounded-md bg-muted p-1">
-              {(["form", "source"] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setMode(id)}
-                  className={cn(
-                    "h-8 rounded-sm px-2.5 text-xs font-medium",
-                    mode === id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {id === "form" ? "Fields" : "Source"}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        {save?.optionOverride || active?.optionOverride ? (
-          <div className="mb-4 rounded-md border border-border bg-background p-3 text-sm">
-            <p className="font-medium">This world has WorldOption.sav</p>
-            <p className="mt-1 text-muted-foreground">
-              Dedicated will ignore most gameplay keys in the INI. Download WorldOption.sav from the pack, or delete that
-              file on the box so the INI applies.
-            </p>
-            <Button className="mt-3" size="sm" variant="outline" onClick={onOpenSav}>
-              Open World.sav editor
-            </Button>
-          </div>
-        ) : null}
-        {mode === "form" ? (
-          <>
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search keys, labels, groups"
-              className="mb-4"
-            />
-            <SettingsFields settings={settings} onChange={setWorldSetting} query={query} />
-          </>
-        ) : (
-          <div>
-            <Label htmlFor="ini-source">INI source</Label>
-            <Textarea
-              id="ini-source"
-              className="mt-2 min-h-80 font-mono text-xs"
-              value={source}
-              onChange={(e) => {
-                setSource(e.target.value);
-                setSourceDirty(true);
-              }}
-            />
-            <div className="mt-3 flex flex-wrap gap-2">
               <Button
+                size="sm"
+                variant="outline"
                 onClick={() => {
-                  const n = importIni(source);
-                  setSourceDirty(false);
-                  toast.success(`Applied ${n} keys`);
+                  restoreBackup(b.id);
+                  if (b.zipPath) {
+                    void restoreSavedZip(b.zipPath, server, paths);
+                  }
+                  toast.success(b.zipPath ? "Restored Pal\\Saved from zip. Server stopped." : "World restored. Server stopped.");
                 }}
               >
-                Apply source
+                Restore
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setSource(preview);
-                  setSourceDirty(false);
-                }}
-              >
-                Revert
-              </Button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-medium">Write both files</h2>
-          <p className="mt-1 mb-3 text-sm text-muted-foreground">
-            Stop PalServer first. The pack is PalWorldSettings.ini, WorldOption.sav, and LevelMeta.sav.
-          </p>
-          <WorldFileBar />
-        </section>
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-medium">Import</h2>
-          <p className="mt-1 mb-3 text-sm text-muted-foreground">
-            Drop PalWorldSettings.ini or WorldOption.sav, or paste OptionSettings.
-          </p>
-          <FileDrop
-            accept=".ini,.sav,text/plain"
-            label="Drop PalWorldSettings.ini or World.sav"
-            hint="Also accepts WorldOption.sav"
-            onFile={(f) => void onUpload(f)}
-          />
-          <div className="mt-3 grid gap-2">
-            <Label htmlFor="ini-paste">Paste</Label>
-            <Textarea
-              id="ini-paste"
-              className="min-h-24 font-mono text-xs"
-              value={paste}
-              onChange={(e) => setPaste(e.target.value)}
-              placeholder="OptionSettings=(ServerName=...)"
-            />
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                if (!paste.trim()) return;
-                const n = importIni(paste);
-                setSourceDirty(false);
-                toast.success(`Read ${n} keys`);
-              }}
-            >
-              Import paste
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                void navigator.clipboard?.writeText(preview);
-                toast.success("Copied PalWorldSettings.ini");
-              }}
-            >
-              Copy
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                resetWorldSettings();
-                setSourceDirty(false);
-                toast("Restored vanilla defaults");
-              }}
-            >
-              Reset vanilla
-            </Button>
-          </div>
-        </section>
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="font-medium">Live INI</h2>
-          <pre className="mt-3 max-h-72 overflow-auto rounded-md bg-background p-3 font-mono text-[11px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
-            {preview}
-          </pre>
-        </section>
-      </aside>
-    </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

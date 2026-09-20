@@ -13,20 +13,6 @@ type SavePickerWindow = Window & {
   }>;
 };
 
-export function formatBytes(n: number) {
-  if (!n) return "";
-  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
-  return `${(n / (1024 * 1024)).toFixed(n > 100 * 1024 * 1024 ? 0 : 1)} MB`;
-}
-
-export async function headPackage(href: string) {
-  const res = await fetch(href, { method: "HEAD" });
-  return {
-    ok: res.ok,
-    bytes: Number(res.headers.get("content-length") || 0),
-  };
-}
-
 function chunkToBuffer(value: Uint8Array): ArrayBuffer {
   return value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) as ArrayBuffer;
 }
@@ -40,6 +26,17 @@ function canUseSavePicker() {
 /** Framed preview panes block blob saves. Prefer a top-level navigation. */
 export function shouldUseNativeDownload() {
   return typeof window !== "undefined" && window.parent !== window;
+}
+
+function acceptFor(filename: string): Record<string, string[]> {
+  if (filename.endsWith(".exe")) {
+    return {
+      "application/vnd.microsoft.portable-executable": [".exe"],
+      "application/x-msdownload": [".exe"],
+      "application/octet-stream": [".exe"],
+    };
+  }
+  return { "application/zip": [".zip"] };
 }
 
 export async function savePackage(
@@ -57,7 +54,7 @@ export async function savePackage(
     try {
       const handle = await (window as SavePickerWindow).showSaveFilePicker!({
         suggestedName: filename,
-        types: [{ description: "Palnest for Windows", accept: { "application/zip": [".zip"] } }],
+        types: [{ description: "Palnest for Windows", accept: acceptFor(filename) }],
       });
       writable = await handle.createWritable();
     } catch (err) {
@@ -107,7 +104,8 @@ export async function savePackage(
     throw err;
   }
 
-  downloadBlob(new Blob(parts, { type: "application/zip" }), filename);
+  const mime = filename.endsWith(".exe") ? "application/vnd.microsoft.portable-executable" : "application/zip";
+  downloadBlob(new Blob(parts, { type: mime }), filename);
   onProgress?.(1);
   return "download";
 }

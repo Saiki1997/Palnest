@@ -41,7 +41,9 @@ export function FleetStrip({ compact }: { compact?: boolean }) {
             Import existing
           </Button>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/server">Manage worlds</Link>
+            <Link to="/server" search={{ tab: "ops" }}>
+              Manage worlds
+            </Link>
           </Button>
         </div>
       </div>

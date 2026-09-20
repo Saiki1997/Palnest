@@ -1,18 +1,30 @@
 #!/usr/bin/env node
+/**
+ * Build Palnest for Windows:
+ *   1. Assemble the local den (Nitro static + fetch handler)
+ *   2. electron-builder → unpacked win32 app (zip/dir)
+ *   3. Custom NSIS MUI2 wizard (.exe) — folder + shortcut options
+ *   4. Flatten the portable zip (extract and run, no registry)
+ */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import { createWriteStream } from "node:fs";
+import { Readable } from "node:stream";
 
 const root = process.cwd();
 const distDir = path.join(root, "dist-desktop");
 const artifacts = path.join(root, "artifacts");
-const publishDir = path.join(root, "publish", "win-x64");
-const dotnet = path.join(root, ".dotnet", "dotnet");
+const hostDir = path.join(root, "desktop-host");
+const vercelOut = path.join(root, ".vercel", "output");
+const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "2.3.0";
 
-function run(cmd, args, env = {}) {
+function run(cmd, args, env = {}, cwd = root) {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, {
-      cwd: root,
+      cwd,
       stdio: "inherit",
       env: { ...process.env, ...env },
     });
@@ -23,6 +35,11 @@ function run(cmd, args, env = {}) {
   });
 }
 
+function copyDir(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  fs.cpSync(from, to, { recursive: true });
+}
+
 function copyIfExists(from, to) {
   if (!fs.existsSync(from)) return false;
   fs.mkdirSync(path.dirname(to), { recursive: true });
@@ -30,67 +47,253 @@ function copyIfExists(from, to) {
   return true;
 }
 
+async function download(url, dest) {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`GET ${url} → ${res.status}`);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(dest));
+}
+
+function which(bin) {
+  const paths = (process.env.PATH || "").split(path.delimiter);
+  for (const dir of paths) {
+    const full = path.join(dir, bin);
+    if (fs.existsSync(full)) return full;
+  }
+  return null;
+}
+
+function assembleHost() {
+  if (!fs.existsSync(path.join(vercelOut, "functions", "__server.func", "index.mjs"))) {
+    throw new Error("Run npm run build first so .vercel/output exists.");
+  }
+  fs.rmSync(hostDir, { recursive: true, force: true });
+  fs.mkdirSync(hostDir, { recursive: true });
+  copyDir(path.join(vercelOut, "static"), path.join(hostDir, "static"));
+  copyDir(path.join(vercelOut, "functions"), path.join(hostDir, "functions"));
+  fs.copyFileSync(path.join(root, "electron", "serve.mjs"), path.join(hostDir, "serve.mjs"));
+  copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(hostDir, "README.txt"));
+  copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(hostDir, "LICENSE.txt"));
+}
+
+function addPortableExtras(folder) {
+  copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(folder, "README.txt"));
+  copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(folder, "LICENSE.txt"));
+  copyIfExists(path.join(root, "electron", "resources", "PORTABLE.txt"), path.join(folder, "PORTABLE.txt"));
+  copyIfExists(path.join(root, "electron", "resources", "Launch Palnest.cmd"), path.join(folder, "Launch Palnest.cmd"));
+}
+
+async function flattenPortableZip(zipPath, destZip) {
+  const { execFileSync } = await import("node:child_process");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "palnest-zip-"));
+  const unpacked = path.join(tmp, "unpacked");
+  fs.mkdirSync(unpacked);
+  execFileSync("unzip", ["-q", zipPath, "-d", unpacked]);
+  const kids = fs.readdirSync(unpacked);
+  const inner =
+    kids.length === 1 && fs.statSync(path.join(unpacked, kids[0])).isDirectory()
+      ? path.join(unpacked, kids[0])
+      : unpacked;
+  addPortableExtras(inner);
+  const stage = path.join(tmp, "Palnest");
+  fs.mkdirSync(stage);
+  fs.cpSync(inner, stage, { recursive: true });
+  const outAbs = path.resolve(destZip);
+  fs.mkdirSync(path.dirname(outAbs), { recursive: true });
+  if (fs.existsSync(outAbs)) fs.unlinkSync(outAbs);
+  const zipBin = which("zip");
+  if (zipBin) {
+    execFileSync(zipBin, ["-r", "-q", "-9", outAbs, "Palnest"], { cwd: tmp });
+  } else {
+    await zipWithPython(stage, outAbs, "Palnest");
+  }
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+async function zipWithPython(folder, destZip, prefix) {
+  const { execFileSync } = await import("node:child_process");
+  const script = `
+import os, zipfile, sys
+root, dest, prefix = sys.argv[1], sys.argv[2], sys.argv[3]
+with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            rel = os.path.join(prefix, os.path.relpath(full, root))
+            z.write(full, rel.replace("\\\\", "/"))
+`;
+  const py = path.join(os.tmpdir(), "palnest-zip.py");
+  fs.writeFileSync(py, script);
+  execFileSync("python3", [py, folder, destZip, prefix]);
+}
+
+async function ensureNsisLinux() {
+  const cached = path.join(root, ".cache", "nsis-308");
+  const makensis = path.join(cached, "usr", "bin", "makensis");
+  const nsisdir = path.join(cached, "usr", "share", "nsis");
+  if (fs.existsSync(makensis) && fs.existsSync(path.join(nsisdir, "Stubs"))) {
+    return { makensis, nsisdir };
+  }
+  fs.mkdirSync(cached, { recursive: true });
+  const commonDeb = path.join(cached, "nsis-common.deb");
+  const nsisDeb = path.join(cached, "nsis.deb");
+  console.log("[palnest-desktop] downloading Linux NSIS 3.08 (makensis)…");
+  await download(
+    "https://ftp.debian.org/debian/pool/main/n/nsis/nsis-common_3.08-3+deb12u1_all.deb",
+    commonDeb,
+  );
+  await download("https://ftp.debian.org/debian/pool/main/n/nsis/nsis_3.08-3+deb12u1_amd64.deb", nsisDeb);
+  const { execFileSync } = await import("node:child_process");
+  const extract = (deb) => {
+    if (which("dpkg-deb")) {
+      execFileSync("dpkg-deb", ["-x", deb, cached]);
+      return;
+    }
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "deb-"));
+    execFileSync("ar", ["x", deb], { cwd: tmp });
+    const data = fs.readdirSync(tmp).find((f) => f.startsWith("data.tar"));
+    if (!data) throw new Error("deb missing data.tar");
+    execFileSync("tar", ["-xf", path.join(tmp, data), "-C", cached]);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  };
+  extract(commonDeb);
+  extract(nsisDeb);
+  if (!fs.existsSync(makensis)) throw new Error("makensis missing after NSIS extract");
+  return { makensis, nsisdir };
+}
+
+async function generateAssets() {
+  const { execFileSync } = await import("node:child_process");
+  execFileSync("python3", [path.join(root, "scripts", "make-installer-assets.py")], { stdio: "inherit" });
+}
+
+async function buildInstallerWizard(unpackedDir) {
+  const { makensis, nsisdir } = await ensureNsisLinux();
+  await generateAssets();
+  const ico = path.join(root, "electron", "resources", "icon.ico");
+  const sidebar = path.join(root, "electron", "resources", "wizard", "sidebar.bmp");
+  const header = path.join(root, "electron", "resources", "wizard", "header.bmp");
+  const license = path.join(root, "electron", "resources", "LICENSE.txt");
+  const readme = path.join(root, "electron", "resources", "README.txt");
+  const nsi = path.join(root, "electron", "installer.nsi");
+  const outExe = path.join(distDir, `Palnest-Setup-${version}.exe`);
+  if (fs.existsSync(outExe)) fs.unlinkSync(outExe);
+  console.log("[palnest-desktop] compiling NSIS setup wizard with makensis…");
+  await run(
+    makensis,
+    [
+      "-V2",
+      `-DVERSION=${version}`,
+      `-DAPP_DIR=${unpackedDir.replace(/\\/g, "/")}`,
+      `-DOUT_FILE=${outExe.replace(/\\/g, "/")}`,
+      `-DICON=${ico.replace(/\\/g, "/")}`,
+      `-DLICENSE=${license.replace(/\\/g, "/")}`,
+      `-DREADME=${readme.replace(/\\/g, "/")}`,
+      `-DSIDEBAR_BMP=${sidebar.replace(/\\/g, "/")}`,
+      `-DHEADER_BMP=${header.replace(/\\/g, "/")}`,
+      nsi,
+    ],
+    { NSISDIR: nsisdir },
+  );
+  if (!fs.existsSync(outExe)) throw new Error("makensis did not emit the installer");
+  return outExe;
+}
+
+function findUnpacked() {
+  const candidates = [
+    path.join(distDir, "win-unpacked"),
+    path.join(distDir, "Palnest-win32-x64"),
+  ];
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, "Palnest.exe")) || fs.existsSync(path.join(dir, "electron.exe"))) return dir;
+  }
+  if (!fs.existsSync(distDir)) return null;
+  for (const name of fs.readdirSync(distDir)) {
+    const dir = path.join(distDir, name);
+    if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, "Palnest.exe"))) return dir;
+  }
+  return null;
+}
+
+function latestFile(dir, pred) {
+  if (!fs.existsSync(dir)) return null;
+  const hits = fs
+    .readdirSync(dir)
+    .filter(pred)
+    .map((f) => path.join(dir, f));
+  hits.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  return hits[0] || null;
+}
+
+function writeManifest(setupName, zipName) {
+  const payload = {
+    version,
+    setup: `/desktop/${setupName}`,
+    portable: `/desktop/${zipName}`,
+    builtAt: new Date().toISOString(),
+    wizard: {
+      chooseDirectory: true,
+      desktopShortcut: "optional",
+      startMenuShortcut: "optional",
+      license: true,
+      finishLaunch: true,
+    },
+    portableNotes: "Extract Palnest folder and run Palnest.exe. No registry install.",
+  };
+  fs.writeFileSync(path.join(distDir, "manifest.json"), JSON.stringify(payload, null, 2));
+  fs.writeFileSync(path.join(artifacts, "palnest-desktop-manifest.json"), JSON.stringify(payload, null, 2));
+}
+
 fs.mkdirSync(artifacts, { recursive: true });
 fs.mkdirSync(distDir, { recursive: true });
 
-const dotnetEnv = {
-  DOTNET_ROOT: path.join(root, ".dotnet"),
-  DOTNET_CLI_HOME: path.join(root, ".dotnet-home"),
-  DOTNET_NOLOGO: "1",
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1",
-};
-dotnetEnv.PATH = `${dotnetEnv.DOTNET_ROOT}:${process.env.PATH ?? ""}`;
+console.log("[palnest-desktop] assembling local den…");
+assembleHost();
 
-console.log("[palnest-desktop] publishing C# host win-x64…");
-await run(
-  fs.existsSync(dotnet) ? dotnet : "dotnet",
-  [
-    "publish",
-    "Palnest.App/Palnest.App.csproj",
-    "-c",
-    "Release",
-    "-r",
-    "win-x64",
-    "--self-contained",
-    "true",
-    "-p:PublishSingleFile=true",
-    "-p:IncludeNativeLibrariesForSelfExtract=true",
-    "-p:EnableCompressionInSingleFile=true",
-    "-p:DebugType=none",
-    "-o",
-    publishDir,
-  ],
-  dotnetEnv,
-);
-
-const exe = path.join(publishDir, "Palnest.exe");
-if (!fs.existsSync(exe)) {
-  throw new Error("dotnet publish did not emit Palnest.exe");
+const unpackedNow = findUnpacked();
+const skipPackager = process.env.PALNEST_SKIP_PACKAGER === "1" && unpackedNow;
+if (skipPackager) {
+  console.log("[palnest-desktop] reusing unpacked app at", unpackedNow);
+} else {
+  console.log("[palnest-desktop] packaging Windows unpacked app…");
+  try {
+    await run("npx", ["electron-builder", "--win", "dir", "zip", "--x64", "--config", "electron-builder.yml"], {
+      CSC_IDENTITY_AUTO_DISCOVERY: "false",
+      ELECTRON_BUILDER_BINARIES_MIRROR: process.env.ELECTRON_BUILDER_BINARIES_MIRROR || "",
+    });
+  } catch (err) {
+    if (!findUnpacked()) throw new Error(`electron-builder failed: ${err instanceof Error ? err.message : err}`);
+    console.warn("[palnest-desktop] electron-builder warned, continuing with unpacked dir");
+  }
 }
 
-console.log("[palnest-desktop] packaging Windows installer + zip…");
-await run("npx", ["electron-builder", "--win", "nsis", "zip", "--x64", "--config", "electron-builder.yml"], {
-  CSC_IDENTITY_AUTO_DISCOVERY: "false",
-});
+const unpacked = findUnpacked();
+if (!unpacked) throw new Error("no Windows unpacked directory — cannot build installer or zip");
 
-const zips = fs
-  .readdirSync(distDir)
-  .filter((f) => f.endsWith(".zip") && /win/i.test(f))
-  .map((f) => path.join(distDir, f));
-zips.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-if (!zips.length) throw new Error("electron-builder did not emit a Windows zip");
-const zip = zips[0];
+copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(unpacked, "README.txt"));
+copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(unpacked, "LICENSE.txt"));
+
+const setup = await buildInstallerWizard(unpacked);
+
+let zip = path.join(distDir, `Palnest-${version}-windows.zip`);
+const existingZip = latestFile(distDir, (f) => f.endsWith(".zip") && /win/i.test(f) && !f.startsWith("_raw"));
+if (existingZip && path.resolve(existingZip) !== path.resolve(zip)) {
+  await flattenPortableZip(existingZip, zip);
+} else {
+  const tmpZip = path.join(distDir, `_raw-${version}.zip`);
+  await zipWithPython(unpacked, tmpZip, "Palnest");
+  await flattenPortableZip(tmpZip, zip);
+  fs.rmSync(tmpZip, { force: true });
+}
+
+const setupDest = path.join(distDir, `Palnest-Setup-${version}.exe`);
+if (path.resolve(setup) !== path.resolve(setupDest)) copyIfExists(setup, setupDest);
+copyIfExists(setupDest, path.join(artifacts, `Palnest-Setup-${version}.exe`));
+copyIfExists(setupDest, path.join(artifacts, "Palnest-Setup.exe"));
+copyIfExists(zip, path.join(artifacts, `Palnest-${version}-windows.zip`));
 copyIfExists(zip, path.join(artifacts, "Palnest-windows.zip"));
-copyIfExists(zip, path.join(distDir, "Palnest-windows.zip"));
 
-const setups = fs
-  .readdirSync(distDir)
-  .filter((f) => /\.exe$/i.test(f) && /setup/i.test(f))
-  .map((f) => path.join(distDir, f));
-setups.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-if (!setups[0]) throw new Error("electron-builder did not emit a Windows installer");
-copyIfExists(setups[0], path.join(artifacts, "Palnest-Setup.exe"));
-copyIfExists(setups[0], path.join(distDir, "Palnest-Setup.exe"));
+writeManifest(`Palnest-Setup-${version}.exe`, `Palnest-${version}-windows.zip`);
 
-console.log("[palnest-desktop] installer", setups[0]);
+console.log("[palnest-desktop] installer", setupDest);
 console.log("[palnest-desktop] zip", zip);

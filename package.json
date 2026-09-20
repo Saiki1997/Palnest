@@ -1,20 +1,26 @@
 {
   "name": "app-builder-workspace",
   "private": true,
-  "version": "2.2.0",
+  "version": "3.0.0",
   "main": "electron/main.mjs",
   "author": "Palnest",
-  "description": "Palworld Server & Mod Manager 2.2.0",
+  "description": "Palworld Server & Mod Manager 3.0.0",
   "sideEffects": false,
   "type": "module",
   "overrides": {
     "nf3": "0.3.17"
   },
   "scripts": {
-    "dev": "node scripts/run-palnest.mjs",
-    "build": "node scripts/run-palnest.mjs --build",
-    "typecheck": "node scripts/run-palnest.mjs --build",
-    "test": "node scripts/run-palnest.mjs --test",
+    "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
+    "build": "node scripts/with-app-env.mjs vite build && npm run db:migrate",
+    "db:migrate": "node scripts/migrate.mjs",
+    "build:dev": "node scripts/with-app-env.mjs vite build --mode development",
+    "preview": "node scripts/with-app-env.mjs vite preview",
+    "preview:restart": "node scripts/preview.mjs restart",
+    "preview:stop": "node scripts/preview.mjs stop",
+    "typecheck": "tsc --noEmit",
+    "check:auth": "node scripts/check-auth-invariant.mjs",
+    "test": "node --test 'scripts/**/*.test.mjs' && node --experimental-strip-types --test src/lib/app-data/app-data.test.ts src/lib/app-data/readiness-schedule.test.ts src/lib/auth/gate-identity.test.ts src/lib/auth/sign-in-gate.test.ts",
     "desktop:pack": "node scripts/build-desktop.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."

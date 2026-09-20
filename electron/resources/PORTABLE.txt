@@ -1,0 +1,11 @@
+This is the portable build of Palnest.
+
+Extract this Palnest folder anywhere (Desktop, USB drive, extra disk)
+and double-click Palnest.exe. No Setup wizard, no Start menu, no
+uninstall registry keys, no Administrator rights.
+
+Do not move Palnest.exe out of this folder — the Chromium runtime and
+the Palnest host live next to it.
+
+Settings and world lists are stored in your Windows user profile, not
+inside this folder, so the portable copy can still remember dens.

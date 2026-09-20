@@ -7,6 +7,7 @@ import {
   enabledTxt,
   findConflicts,
   formatBanlist,
+  formatJoinMotd,
   guessZipKind,
   modExtractDest,
   pakDiskName,
@@ -145,4 +146,10 @@ test("REST player and metrics parsers", () => {
   assert.equal(metrics.players, 4);
   assert.equal(guessZipKind("CoolPak.zip"), "pak");
   assert.match(modExtractDest("C:\\PalServer", "pak"), /~mods/);
+});
+
+test("join MOTD substitutes player and world", () => {
+  assert.equal(formatJoinMotd("Welcome {player} to {world}.", "Gridlord", "Hollow Isle"), "Welcome Gridlord to Hollow Isle.");
+  assert.equal(formatJoinMotd("hi {name}", "Ada", "X"), "hi Ada");
+  assert.equal(formatJoinMotd("   ", "Ada", "X"), "");
 });

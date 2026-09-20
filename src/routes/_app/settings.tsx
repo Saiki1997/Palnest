@@ -2,6 +2,7 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { SaveBar } from "@/components/save-bar";
 import { DesktopGet } from "@/components/desktop-get";
 import { FolderScan, toastScanResult } from "@/components/folder-scan";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ import { mapUpnp } from "@/lib/runtime";
 import type { Locale, Ue4ssChannel } from "@/lib/ops";
 import { webhookPayload } from "@/lib/ops";
 import { BACKUP_INTERVALS } from "@/lib/backup";
+import { downloadText, readFileText } from "@/lib/download";
 
 export const Route = createFileRoute("/_app/settings")({ component: SettingsPage });
 
@@ -50,6 +52,15 @@ function SettingsPage() {
   const navigate = useNavigate();
   const [clientPreview, setClientPreview] = useState<ScanResult | null>(null);
   const [serverPreview, setServerPreview] = useState<ScanResult | null>(null);
+  const [keysDraft, setKeysDraft] = useState<Partial<typeof keys> | null>(null);
+  const shownKeys = { ...keys, ...keysDraft };
+
+  function saveKeys() {
+    if (!keysDraft) return;
+    setKeys(keysDraft);
+    setKeysDraft(null);
+    toast.success("Saved store API keys");
+  }
 
   return (
     <div>
@@ -151,7 +162,7 @@ function SettingsPage() {
       <section className="mb-6 rounded-xl border border-border bg-card p-5">
         <h2 className="font-medium">Store APIs</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
-          Nexus, Steam Web API, and CurseForge. Leave blank to browse the Palnest index.
+          Keys stay in this browser and are sent only to the store you asked Palnest to query. With a key, Discover loads live catalogs, descriptions, and the file list so you can pick which archive to install.
         </p>
         <div className="grid gap-4">
           <div className="grid gap-2">
@@ -160,9 +171,15 @@ function SettingsPage() {
               id="nexus"
               type="password"
               autoComplete="off"
-              value={keys.nexus}
-              onChange={(e) => setKeys({ nexus: e.target.value })}
+              value={shownKeys.nexus}
+              onChange={(e) => setKeysDraft((d) => ({ ...(d ?? {}), nexus: e.target.value }))}
             />
+            <p className="text-xs text-muted-foreground">
+              Latest-added, trending, updated Palworld mods, full descriptions, and every MAIN / OPTIONAL file.{" "}
+              <a href="https://www.nexusmods.com/users/myaccount?tab=api" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                Get a Nexus key
+              </a>
+            </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="steam">Steam Web API key</Label>
@@ -170,9 +187,15 @@ function SettingsPage() {
               id="steam"
               type="password"
               autoComplete="off"
-              value={keys.steam}
-              onChange={(e) => setKeys({ steam: e.target.value })}
+              value={shownKeys.steam}
+              onChange={(e) => setKeysDraft((d) => ({ ...(d ?? {}), steam: e.target.value }))}
             />
+            <p className="text-xs text-muted-foreground">
+              Workshop QueryFiles search, sort, and time filters. Item pages load without a key.{" "}
+              <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                Get a Steam key
+              </a>
+            </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="cf">CurseForge API key</Label>
@@ -180,11 +203,18 @@ function SettingsPage() {
               id="cf"
               type="password"
               autoComplete="off"
-              value={keys.curseforge}
-              onChange={(e) => setKeys({ curseforge: e.target.value })}
+              value={shownKeys.curseforge}
+              onChange={(e) => setKeysDraft((d) => ({ ...(d ?? {}), curseforge: e.target.value }))}
             />
+            <p className="text-xs text-muted-foreground">
+              Palworld project search, descriptions, and file lists.{" "}
+              <a href="https://console.curseforge.com/" target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                Get a CurseForge key
+              </a>
+            </p>
           </div>
         </div>
+        <SaveBar dirty={Boolean(keysDraft)} onSave={saveKeys} onDiscard={() => setKeysDraft(null)} hint="API keys stay in this browser until you save." />
       </section>
 
       <section className="mb-6 rounded-xl border border-border bg-card p-5">
@@ -221,7 +251,7 @@ function SettingsPage() {
         <section className="mb-6 rounded-xl border border-border bg-card p-5">
           <h2 className="font-medium">Monitor thresholds</h2>
           <p className="mt-1 mb-4 text-sm text-muted-foreground">
-            Sustained alerts on the dashboard and Monitor page. A spike that recovers inside the sustain window is ignored.
+            Sustained alerts on the dashboard. A spike that recovers inside the sustain window is ignored.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
@@ -480,8 +510,49 @@ function SettingsPage() {
 
       <section className="rounded-xl border border-border bg-card p-5">
         <h2 className="font-medium">World data</h2>
-        <p className="mt-1 mb-4 text-sm text-muted-foreground">Stored in this browser. Reset returns you to first-run setup.</p>
+        <p className="mt-1 mb-4 text-sm text-muted-foreground">
+          Stored in this browser. Export a Palnest.json to move worlds between PCs. Reset returns you to first-run setup.
+        </p>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => {
+              const raw = localStorage.getItem("palnest-v14") || JSON.stringify({ state: {}, version: 0 });
+              downloadText(raw, `palnest-${new Date().toISOString().slice(0, 10)}.json`);
+              toast.success("Exported Palnest.json");
+            }}
+          >
+            Export Palnest.json
+          </Button>
+          <Button variant="outline" asChild>
+            <label className="cursor-pointer">
+              Import Palnest.json
+              <input
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  void readFileText(file).then((text) => {
+                    try {
+                      const parsed = JSON.parse(text) as { state?: unknown };
+                      const blob =
+                        parsed && typeof parsed === "object" && parsed.state
+                          ? text
+                          : JSON.stringify({ state: parsed, version: 0 });
+                      localStorage.setItem("palnest-v14", blob);
+                      toast.success("Imported. Reloading…");
+                      window.setTimeout(() => window.location.reload(), 400);
+                    } catch {
+                      toast.error("Not a Palnest.json file");
+                    }
+                  });
+                }}
+              />
+            </label>
+          </Button>
           <Button
             variant="outline"
             onClick={() => {

@@ -1,0 +1,13 @@
+Palnest — Palworld Server & Mod Manager
+Copyright (c) 2026 Palnest
+
+Permission is granted to use this software to manage Palworld dedicated
+servers, worlds, and mods on machines you own or are authorized to operate.
+
+This package is provided as-is, without warranty of any kind. Palworld,
+Steam, Nexus Mods, CurseForge, UE4SS, PalSchema, playit.gg, and PortWarp
+are trademarks of their respective owners. Palnest is not affiliated with
+Pocketpair.
+
+The installer can create optional Desktop and Start menu shortcuts. The
+portable zip does not write to the registry or install services.

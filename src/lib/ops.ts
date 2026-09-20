@@ -37,6 +37,9 @@ export interface OpsState {
   startTunnels: boolean;
   scheduleRestart: string;
   scheduleRestartOn: boolean;
+  scheduleRestartMode: "times" | "interval";
+  scheduleRestartTimes: string[];
+  scheduleRestartHours: number;
   scheduleBackupHours: number;
   scheduleBackupMinutes: number;
   scheduleBackupOn: boolean;
@@ -88,6 +91,9 @@ export function defaultOps(): OpsState {
     startTunnels: true,
     scheduleRestart: "",
     scheduleRestartOn: false,
+    scheduleRestartMode: "times",
+    scheduleRestartTimes: [],
+    scheduleRestartHours: 6,
     scheduleBackupHours: 6,
     scheduleBackupMinutes: 360,
     scheduleBackupOn: true,
@@ -230,8 +236,22 @@ export function dueSchedule(hhmm: string, now = new Date(), lastFireDay = "") {
   if (!/^\d{2}:\d{2}$/.test(hhmm)) return false;
   const [h, m] = hhmm.split(":").map(Number);
   const day = now.toISOString().slice(0, 10);
-  if (lastFireDay === day) return false;
+  if (lastFireDay === day || lastFireDay === `${day}|${hhmm}`) return false;
   return now.getHours() === h && now.getMinutes() === m;
+}
+
+export function dueAnySchedule(times: string[], now = new Date(), lastKey = "") {
+  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  if (!times.includes(hhmm)) return false;
+  const day = now.toISOString().slice(0, 10);
+  const key = `${day}|${hhmm}`;
+  return lastKey !== key;
+}
+
+export function dueIntervalRestart(hours: number, lastIso: string | null, now = Date.now()) {
+  if (!hours || hours <= 0) return false;
+  if (!lastIso) return false;
+  return now - new Date(lastIso).getTime() >= hours * 60 * 60 * 1000;
 }
 
 export function backupDue(lastIso: string | null, minutes: number, now = Date.now()) {
@@ -281,6 +301,48 @@ export function webhookPayload(kind: "join" | "leave" | "crash" | "backup" | "st
   };
 }
 
+export function formatJoinMotd(template: string, player: string, world: string) {
+  return template
+    .replaceAll("{player}", player)
+    .replaceAll("{name}", player)
+    .replaceAll("{world}", world)
+    .trim();
+}
+
+export function connectionReport(input: {
+  name: string;
+  running: boolean;
+  pid: number | null;
+  port: number;
+  queryPort: number;
+  restPort: number;
+  rconPort: number;
+  listenAt: string | null;
+  publicIp: string;
+  tunnelHost?: string;
+  restOn: boolean;
+  firewallHint?: string;
+}) {
+  const bound = Boolean(input.listenAt);
+  const lines = [
+    "Palnest connection check",
+    `Server: ${input.name}`,
+    `Process: ${input.running ? `running${input.pid ? ` pid ${input.pid}` : ""}` : "stopped"}`,
+    `Game UDP ${input.port}: ${bound ? "bound" : input.running ? "not bound yet" : "idle"}`,
+    `Steam query ${input.queryPort}: ${input.running ? (bound ? "listening" : "waiting for bind") : "idle"}`,
+    `REST ${input.restPort}: ${input.restOn ? (input.running ? (bound ? "enabled" : "waiting") : "configured, server down") : "off in PalWorldSettings"}`,
+    `RCON ${input.rconPort}: configured`,
+    `Public address: ${input.publicIp || "not advertised"}`,
+    `Tunnel: ${input.tunnelHost || "none"}`,
+    `Firewall: ${input.firewallHint || "Windows Defender inbound UDP/TCP is written by Palnest.exe on the desktop pack. This preview does not probe the host firewall."}`,
+    "",
+    bound
+      ? "Join should work if the tunnel or port-forward matches the game UDP port."
+      : "Start the dedicated box, wait until lifecycle is Listening, then run this again.",
+  ];
+  return lines.join("\n");
+}
+
 export function restUrl(port: number, path: string) {
   return `http://127.0.0.1:${port}${path}`;
 }
@@ -294,6 +356,7 @@ export function parseRestPlayers(body: unknown): PlayerInfo[] {
       return {
         name: String(p.name ?? "Player"),
         playerId: String(p.playerId ?? p.userId ?? p.steamid ?? ""),
+        userId: String(p.userId ?? p.steamid ?? p.playerId ?? ""),
         level: Number(p.level ?? 1) || 1,
         ping: Number(p.ping ?? 0) || 0,
         location:
@@ -350,6 +413,10 @@ export function iniDiskPath(serverRoot: string, linux = false) {
 export function engineIniPath(serverRoot: string, linux = false) {
   const folder = linux ? "LinuxServer" : "WindowsServer";
   return `${serverRoot.replace(/[\\/]$/, "")}\\Pal\\Saved\\Config\\${folder}\\Engine.ini`;
+}
+
+export function clientEngineIniPath(clientRoot: string) {
+  return `${clientRoot.replace(/[\\/]$/, "")}\\Pal\\Saved\\Config\\Windows\\Engine.ini`;
 }
 
 export function argvFromCommand(command: string) {

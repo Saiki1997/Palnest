@@ -6,6 +6,7 @@ import { modInstallPath } from "./paths";
 import { defaultOps, type BanEntry, type ModProfile, type OpsState } from "./ops";
 import { normalizeInstance, portsForSlot } from "./fleet";
 import { idleTunnel } from "./tunnels";
+import { defaultFx, type ClientFx } from "./fx";
 import type {
   AppMode,
   BackupInfo,
@@ -17,6 +18,8 @@ import type {
   ServerState,
   WorldInfo,
   WorldSaveData,
+  ModCacheState,
+  SearchHit,
 } from "./types";
 
 export { APP_VERSION, APP_BUILD, APP_NAME, APP_EDITION, APP_LINE } from "./version";
@@ -54,12 +57,15 @@ export interface PalnestState {
   denSettings: Record<string, ReturnType<typeof defaultSettings>>;
   lastBackupAt: string | null;
   lastRestartDay: string;
+  fx: ClientFx;
+  modCache: ModCacheState;
+  peekHit: SearchHit | null;
 }
 
 const SAMPLE_CLIENT = "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Palworld";
 const SAMPLE_SERVER = "C:\\PalServers\\HollowIsle";
 
-function frameworksEmpty(): Record<string, FrameworkInstall> {
+export function frameworksEmpty(): Record<string, FrameworkInstall> {
   return {
     ue4ss: {
       id: "ue4ss",
@@ -133,6 +139,9 @@ export function emptyState(): PalnestState {
     denSettings: {},
     lastBackupAt: null,
     lastRestartDay: "",
+    fx: defaultFx(),
+    modCache: {},
+    peekHit: null,
   };
 }
 
@@ -278,28 +287,63 @@ export function sampleState(): PalnestState {
       id: "l1",
       ts: new Date(Date.now() - 1000 * 60 * 214).toISOString(),
       level: "ok",
+      source: "app",
+      message: "Palnest ready. Hollow Isle selected.",
+    },
+    {
+      id: "l2",
+      ts: new Date(Date.now() - 1000 * 60 * 214).toISOString(),
+      level: "ok",
       source: "server",
       message: "PalServer 1.0.5 (1120515) listening on UDP 8211.",
     },
     {
-      id: "l2",
+      id: "l3",
       ts: new Date(Date.now() - 1000 * 60 * 210).toISOString(),
       level: "ok",
-      source: "ue4ss",
+      source: "server-ue4ss",
       message: "UE4SS 2281fa31 attached. 8 Lua mods, 6 PalSchema packs.",
     },
     {
-      id: "l3",
+      id: "l8",
+      ts: new Date(Date.now() - 1000 * 60 * 200).toISOString(),
+      level: "info",
+      source: "client-ue4ss",
+      message: "Client UE4SS console idle. Palworld.exe is not attached in this preview.",
+    },
+    {
+      id: "l9",
+      ts: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+      level: "info",
+      source: "pal",
+      message: "LogPal: Display: WorldSave completed.",
+    },
+    {
+      id: "l12",
+      ts: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+      level: "info",
+      source: "pal",
+      message: "LogPal: Player Mira connected. SteamID 76561198000001.",
+    },
+    {
+      id: "l13",
+      ts: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
+      level: "warn",
+      source: "server-ue4ss",
+      message: "UE4SS: PalSchema hot-reload skipped — verbose logging is off.",
+    },
+    {
+      id: "l4",
       ts: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
       level: "warn",
       source: "checker",
       message: "Broken pack Tidebound is client-side. Checker lists it; PalServer start ignores client-only packs.",
     },
     {
-      id: "l4",
+      id: "l5",
       ts: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
       level: "info",
-      source: "rest",
+      source: "activity",
       message: "Mira joined Hollow Isle (12/32).",
     },
     {
@@ -315,6 +359,13 @@ export function sampleState(): PalnestState {
       level: "info",
       source: "fleet",
       message: "Build Yard is idle on UDP 8221. Start it alongside Hollow Isle when the yard needs players.",
+    },
+    {
+      id: "l10",
+      ts: new Date(Date.now() - 1000 * 30).toISOString(),
+      level: "error",
+      source: "pal",
+      message: "LogStreaming: Slow load 412ms on /Game/Pal/Maps/worldtree chunk 7.",
     },
   ];
 
@@ -411,6 +462,7 @@ export function sampleState(): PalnestState {
         lastPlayed: new Date().toISOString(),
         sizeMb: 1840,
         guilds: 6,
+        loadoutId: "prof-pve",
         optionOverride: true,
       },
       {
@@ -520,12 +572,12 @@ export function sampleState(): PalnestState {
           { id: "p-sol", name: "Sol", uid: "00000000-0000-0000-0000-000000000006", steamId: "76561198000006", level: 29, exp: 70400, guild: "Tide", pals: 16, lastSeen: "2026-09-14T22:40:00.000Z", online: false },
         ],
         guilds: [
-          { id: "g-shoal", name: "Shoal", owner: "Mira", members: 2, bases: 3 },
-          { id: "g-ash", name: "Ashwalkers", owner: "Ivy", members: 1, bases: 2 },
-          { id: "g-ember", name: "Ember", owner: "Nori", members: 1, bases: 1 },
-          { id: "g-tide", name: "Tide", owner: "Sol", members: 1, bases: 1 },
-          { id: "g-glass", name: "Glass", owner: "—", members: 0, bases: 1 },
-          { id: "g-hollow", name: "Hollow", owner: "—", members: 0, bases: 0 },
+          { id: "g-shoal", name: "Shoal", owner: "Mira", members: 2, memberIds: ["p-mira", "p-ren"], bases: 3 },
+          { id: "g-ash", name: "Ashwalkers", owner: "Ivy", members: 1, memberIds: ["p-ivy"], bases: 2 },
+          { id: "g-ember", name: "Ember", owner: "Nori", members: 1, memberIds: ["p-nori"], bases: 1 },
+          { id: "g-tide", name: "Tide", owner: "Sol", members: 1, memberIds: ["p-sol"], bases: 1 },
+          { id: "g-glass", name: "Glass", owner: "—", members: 0, memberIds: [], bases: 1 },
+          { id: "g-hollow", name: "Hollow", owner: "—", members: 0, memberIds: [], bases: 0 },
         ],
         imported: {
           name: "WorldOption.sav",
@@ -542,7 +594,7 @@ export function sampleState(): PalnestState {
         players: [
           { id: "p-yard", name: "Yardkeep", uid: "00000000-0000-0000-0000-000000000010", steamId: "76561198000010", level: 18, exp: 22000, guild: "Yard", pals: 6, lastSeen: "2026-08-30T18:11:00.000Z", online: false },
         ],
-        guilds: [{ id: "g-yard", name: "Yard", owner: "Yardkeep", members: 1, bases: 1 }],
+        guilds: [{ id: "g-yard", name: "Yard", owner: "Yardkeep", members: 1, memberIds: ["p-yard"], bases: 1 }],
       },
     },
     engineTweaks: defaultEngineTweaks(),
@@ -587,6 +639,35 @@ export function sampleState(): PalnestState {
     denSettings: {},
     lastBackupAt: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(),
     lastRestartDay: "",
+    fx: {
+      ...defaultFx(),
+      unidentified: [
+        {
+          id: "u1",
+          path: "Pal\\Binaries\\Win64\\ue4ss\\Mods\\UnknownDrop.lua",
+          kind: "ue4ss",
+          at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+        },
+      ],
+      history: [
+        {
+          id: "h1",
+          name: "Better Palbox",
+          action: "install",
+          at: "2026-08-20T12:00:00.000Z",
+          detail: "Installed from Nexus as PalSchema on both.",
+        },
+        {
+          id: "h2",
+          name: "Stackable Items",
+          action: "update",
+          at: "2026-09-12T09:10:00.000Z",
+          detail: "Updated to latest on both.",
+        },
+      ],
+    },
+    modCache: {},
+    peekHit: null,
   };
 }
 

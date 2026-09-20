@@ -16,14 +16,15 @@ import type {
   WorldSaveData,
   WorldSnapshot,
   ModFileChoice,
+  DiscoverSource,
 } from "./types";
 import type { WorldMeta } from "./sav";
-import { emptyState, freshConfigured, sampleState, SERVER_VERSIONS, type PalnestState } from "./seed";
+import { emptyState, freshConfigured, frameworksEmpty, sampleState, SERVER_VERSIONS, type PalnestState } from "./seed";
 import { CATALOG, CURRENT_GAME } from "./catalog";
 import { modInstallPath } from "./paths";
 import { applyParsed, mergeSettings, parseOptionSettings } from "./ini";
 import { addCustomArg, mergeEngineTweaks, OPTIMIZE_PRESETS } from "./args";
-import { nid } from "./utils";
+import { nid, nextCopyName } from "./utils";
 import { scanListing, type ScanFile, type ScanResult } from "./scan";
 import { bootConflicts } from "./checker";
 import {
@@ -48,6 +49,7 @@ import {
   type ModProfile,
   type OpsState,
 } from "./ops";
+import { mergeFx, pushHistory, type ClientFx, type EngineBlock } from "./fx";
 
 type LogInput = Omit<LogEntry, "id" | "ts"> & { id?: string; ts?: string };
 
@@ -97,6 +99,7 @@ interface Actions {
     community?: boolean;
     notes?: string;
   }) => { id: string; error?: string };
+  cloneServer: (id: string) => { id: string; error?: string };
   removeServer: (id: string) => string | null;
   patchServer: (id: string, patch: Partial<ServerState>) => string | null;
   startAllServers: () => { started: number; skipped: number };
@@ -113,13 +116,21 @@ interface Actions {
   }) => { added: number; updated: number; id: string };
   ingestDetected: (target: InstallTarget, result: ScanResult) => { added: number; updated: number };
   switchWorld: (id: string) => void;
+  cloneWorld: (id: string) => { id: string; error?: string };
+  deleteWorld: (id: string) => string | null;
+  createWorld: (name?: string) => { id: string };
+  cacheMods: (source: DiscoverSource, bucket: { query: string; hits: SearchHit[]; live: boolean; note: string }) => void;
+  rememberHit: (hit: SearchHit) => void;
+  setPeekHit: (hit: SearchHit | null) => void;
   createBackup: (kind: PalnestState["backups"][number]["kind"], label: string) => void;
   restoreBackup: (id: string) => void;
   setLaunchArg: (id: string, patch: Partial<PalnestState["launchArgs"][number]>) => void;
   addLaunchArg: (flag: string, value?: string) => void;
   removeLaunchArg: (id: string) => void;
+  replaceLaunchArgs: (args: PalnestState["launchArgs"]) => void;
   applyPreset: (id: string) => void;
   setWorldSetting: (key: string, value: string) => void;
+  commitWorldSettings: (values: Record<string, string>) => void;
   resetWorldSettings: () => void;
   importIni: (raw: string) => number;
   patchWorld: (id: string, patch: Partial<PalnestState["worlds"][number]>) => void;
@@ -139,6 +150,12 @@ interface Actions {
     meta?: WorldMeta;
   }) => number;
   setEngineTweak: (id: string, patch: Partial<PalnestState["engineTweaks"][number]>) => void;
+  setFx: (patch: Partial<ClientFx>) => void;
+  addEngineBlock: (block: Omit<EngineBlock, "id"> & { id?: string }) => void;
+  moveEngineBlock: (id: string, dir: -1 | 1) => void;
+  removeEngineBlock: (id: string) => void;
+  identifyFile: (id: string, name?: string) => void;
+  dismissUnidentified: (id: string) => void;
   applyFix: (action: string, modId?: string) => void;
   tickMonitor: () => void;
   setMonitorThresholds: (patch: Partial<MonitorThresholds>) => void;
@@ -159,12 +176,14 @@ interface Actions {
   snapshotSaved: (serverId?: string) => void;
   importBanlist: (text: string) => number;
   assignPlayerToGuild: (worldId: string, playerId: string, guildName: string) => void;
+  addGuildMember: (worldId: string, guildId: string, playerId: string) => void;
+  removeGuildMember: (worldId: string, guildId: string, playerId: string) => void;
   banPlayer: (playerId: string, serverId?: string, reason?: string) => void;
 }
 
 export type Store = PalnestState & Actions;
 
-const MAX_LOGS = 80;
+const MAX_LOGS = 500;
 
 function pushLog(logs: LogEntry[], entry: LogInput): LogEntry[] {
   const next: LogEntry = {
@@ -175,6 +194,21 @@ function pushLog(logs: LogEntry[], entry: LogInput): LogEntry[] {
     message: entry.message,
   };
   return [next, ...logs].slice(0, MAX_LOGS);
+}
+
+function cloneWorldSave(prev: WorldSaveData, worldId: string): WorldSaveData {
+  const playerIds = new Map(prev.players.map((p) => [p.id, nid("p")]));
+  const guildIds = new Map(prev.guilds.map((g) => [g.id, nid("g")]));
+  return {
+    ...prev,
+    worldId,
+    players: prev.players.map((p) => ({ ...p, id: playerIds.get(p.id) ?? p.id, online: false })),
+    guilds: prev.guilds.map((g) => ({
+      ...g,
+      id: guildIds.get(g.id) ?? g.id,
+      memberIds: (g.memberIds ?? []).map((id) => playerIds.get(id) ?? id),
+    })),
+  };
 }
 
 function mergeDetected(s: PalnestState, target: InstallTarget, result: ScanResult) {
@@ -414,9 +448,18 @@ export const useAppStore = create<Store>()(
           sizeKb: file?.sizeKb ?? catalog?.sizeKb ?? 128,
           installedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          image: hit.image,
         };
         set((st) => ({
           mods: [...st.mods, mod],
+          fx: {
+            ...mergeFx(st.fx),
+            history: pushHistory(mergeFx(st.fx).history, {
+              name: hit.name,
+              action: "install",
+              detail: `Installed ${file?.name || hit.name} as ${kind} → ${target}.`,
+            }),
+          },
           logs: pushLog(st.logs, {
             level: "ok",
             source: hit.source,
@@ -428,8 +471,17 @@ export const useAppStore = create<Store>()(
         set((s) => {
           const mods = s.mods.map((m) => (m.id === id ? { ...m, enabled: !m.enabled } : m));
           const mod = mods.find((m) => m.id === id);
+          const fx = mergeFx(s.fx);
           return {
             mods,
+            fx: {
+              ...fx,
+              history: pushHistory(fx.history, {
+                name: mod?.name ?? "Mod",
+                action: mod?.enabled ? "enable" : "disable",
+                detail: `${mod?.name ?? "Mod"} ${mod?.enabled ? "enabled" : "disabled"}.`,
+              }),
+            },
             logs: pushLog(s.logs, {
               level: "info",
               source: "mods",
@@ -440,8 +492,17 @@ export const useAppStore = create<Store>()(
       uninstallMod: (id) =>
         set((s) => {
           const mod = s.mods.find((m) => m.id === id);
+          const fx = mergeFx(s.fx);
           return {
             mods: s.mods.filter((m) => m.id !== id),
+            fx: {
+              ...fx,
+              history: pushHistory(fx.history, {
+                name: mod?.name ?? "mod",
+                action: "uninstall",
+                detail: `Removed ${mod?.fileCount ?? 0} tracked files from ${mod?.installPath || "the install folder"}.`,
+              }),
+            },
             logs: pushLog(s.logs, {
               level: "info",
               source: "mods",
@@ -650,8 +711,13 @@ export const useAppStore = create<Store>()(
           };
         }),
       restartServer: (id) => {
-        get().stopServer(id);
-        return get().startServer(id);
+        const s = get();
+        const targetId = id ?? s.activeServerId ?? s.server.id;
+        get().stopServer(targetId);
+        globalThis.setTimeout(() => {
+          get().startServer(targetId);
+        }, 1400);
+        return null;
       },
       updateServer: (version, id) =>
         set((s) => {
@@ -859,6 +925,101 @@ export const useAppStore = create<Store>()(
               level: "ok",
               source: "fleet",
               message: `Created ${inst.name} on UDP ${inst.port} / query ${inst.queryPort} / REST ${inst.restPort}.`,
+            }),
+          };
+        });
+        return created;
+      },
+      cloneServer: (id) => {
+        const created = { id: "", error: undefined as string | undefined };
+        set((s) => {
+          const fleet = migrateFleet(s);
+          const source = fleet.instances.find((i) => i.id === id);
+          if (!source) {
+            created.error = "That server is already gone.";
+            return s;
+          }
+          if (source.running) {
+            created.error = `Stop ${source.name} before cloning it.`;
+            return s;
+          }
+          const slot = nextSlot(fleet.instances);
+          const ports = portsForSlot(slot);
+          const clash = portConflicts(fleet.instances, { id: "new", ...ports }, true);
+          if (clash) {
+            created.error = `Port ${clash.port} is in use by ${clash.otherName}. Stop that world first.`;
+            return s;
+          }
+          const srcWorld = s.worlds.find((w) => w.id === source.worldId);
+          const worldId = nid("world");
+          const worldName = srcWorld
+            ? nextCopyName(
+                s.worlds.map((w) => w.name),
+                srcWorld.name,
+              )
+            : `${source.name} World copy`;
+          const worlds = [
+            ...s.worlds,
+            {
+              id: worldId,
+              name: worldName,
+              guid: nid("guid").toUpperCase(),
+              active: false,
+              days: srcWorld?.days ?? 0,
+              lastPlayed: new Date().toISOString(),
+              sizeMb: srcWorld ? Math.max(8, Math.round(srcWorld.sizeMb * 0.12)) : 12,
+              guilds: srcWorld?.guilds ?? 0,
+              optionOverride: srcWorld?.optionOverride,
+              loadoutId: srcWorld?.loadoutId,
+              created: true,
+            },
+          ];
+          const prev = srcWorld ? s.worldSaves[srcWorld.id] : undefined;
+          const inst = normalizeInstance({
+            id: nid("srv"),
+            name: nextCopyName(
+              fleet.instances.map((i) => i.name),
+              source.name,
+            ),
+            description: source.description,
+            running: false,
+            startedAt: null,
+            version: source.version,
+            build: source.build,
+            ...ports,
+            maxPlayers: source.maxPlayers,
+            community: source.community,
+            publicIp: "",
+            players: [],
+            versions: SERVER_VERSIONS,
+            history: source.history,
+            imported: false,
+            importedFrom: source.installPath,
+            installPath: suggestedInstallPath(s.paths.server || source.installPath, `${source.name} copy`),
+            worldId,
+            slot,
+            notes: source.notes ? `Clone of ${source.name}. ${source.notes}` : `Clone of ${source.name}.`,
+            layout: source.layout,
+          });
+          created.id = inst.id;
+          return {
+            instances: [...fleet.instances, inst],
+            worlds,
+            worldSaves: {
+              ...s.worldSaves,
+              [worldId]: prev ? cloneWorldSave(prev, worldId) : {
+                    worldId,
+                    optionOverride: false,
+                    worldTime: "Day 0 · 08:00",
+                    players: [],
+                    guilds: [],
+                  },
+            },
+            denSettings: { ...(s.denSettings ?? {}), [inst.id]: s.denSettings?.[source.id] ?? s.worldSettings },
+            logs: pushLog(s.logs, {
+              level: "ok",
+              source: "fleet",
+              message: `Cloned ${source.name} → ${inst.name} on UDP ${inst.port} / query ${inst.queryPort} / REST ${inst.restPort}.`,
             }),
           };
         });
@@ -1131,6 +1292,155 @@ export const useAppStore = create<Store>()(
             }),
           };
         }),
+      cloneWorld: (id) => {
+        const created = { id: "", error: undefined as string | undefined };
+        set((s) => {
+          const source = s.worlds.find((w) => w.id === id);
+          if (!source) {
+            created.error = "World not found.";
+            return s;
+          }
+          const worldId = nid("world");
+          created.id = worldId;
+          const copy = {
+            ...source,
+            id: worldId,
+            name: nextCopyName(
+              s.worlds.map((w) => w.name),
+              source.name,
+            ),
+            guid: nid("guid").toUpperCase(),
+            active: false,
+            lastPlayed: new Date().toISOString(),
+            sizeMb: Math.max(8, Math.round(source.sizeMb * 0.12)),
+          };
+          const prev = s.worldSaves[source.id];
+          return {
+            worlds: [...s.worlds, copy],
+            worldSaves: {
+              ...s.worldSaves,
+              [worldId]: prev
+                ? cloneWorldSave(prev, worldId)
+                : {
+                    worldId,
+                    optionOverride: source.optionOverride ?? false,
+                    worldTime: "Day 0 · 08:00",
+                    players: [],
+                    guilds: [],
+                  },
+            },
+            logs: pushLog(s.logs, {
+              level: "ok",
+              source: "worlds",
+              message: `Cloned ${source.name} → ${copy.name}. New GUID; Saved folder copied.`,
+            }),
+          };
+        });
+        return created;
+      },
+      deleteWorld: (id) => {
+        const s = get();
+        if (s.worlds.length < 2) return "Keep at least one world.";
+        const world = s.worlds.find((w) => w.id === id);
+        if (!world) return "That world is already gone.";
+        const busy = worldBusy(fleetOf(s), id) ?? (s.server.running && s.server.worldId === id ? s.server : undefined);
+        if (busy) return `Stop ${busy.name} before deleting ${world.name}.`;
+        set((st) => {
+          const worlds = st.worlds.filter((w) => w.id !== id);
+          const nextActive = world.active ? worlds[0] : (worlds.find((w) => w.active) ?? worlds[0]);
+          const { [id]: _removed, ...worldSaves } = st.worldSaves;
+          const instances = fleetOf(st).map((inst) => (inst.worldId === id ? { ...inst, worldId: nextActive.id } : inst));
+          const active = instances.find((i) => i.id === st.activeServerId) ?? instances[0];
+          return {
+            worlds: worlds.map((w) => ({ ...w, active: w.id === nextActive.id })),
+            worldSaves,
+            instances,
+            server: active,
+            logs: pushLog(st.logs, {
+              level: "info",
+              source: "worlds",
+              message: `Deleted ${world.name}. Saved folder removed from Palnest.`,
+            }),
+          };
+        });
+        return null;
+      },
+      createWorld: (name) => {
+        const created = { id: nid("world") };
+        set((s) => {
+          const worldId = created.id;
+          const label = name?.trim() || "New world";
+          return {
+            worlds: [
+              ...s.worlds.map((w) => ({ ...w, active: false })),
+              {
+                id: worldId,
+                name: label,
+                guid: nid("guid").toUpperCase(),
+                active: true,
+                days: 0,
+                lastPlayed: new Date().toISOString(),
+                sizeMb: 12,
+                guilds: 0,
+                optionOverride: false,
+              },
+            ],
+            worldSaves: {
+              ...s.worldSaves,
+              [worldId]: { worldId, optionOverride: false, worldTime: "Day 0 · 08:00", players: [], guilds: [] },
+            },
+            logs: pushLog(s.logs, {
+              level: "ok",
+              source: "worlds",
+              message: `Created world ${label}.`,
+            }),
+          };
+        });
+        return created;
+      },
+      cacheMods: (source, bucket) =>
+        set((s) => ({
+          modCache: {
+            ...s.modCache,
+            [source]: {
+              query: bucket.query,
+              hits: bucket.hits,
+              live: bucket.live,
+              note: bucket.note,
+              fetchedAt: new Date().toISOString(),
+            },
+          },
+        })),
+      rememberHit: (hit) =>
+        set((s) => {
+          const stamp = hit.cachedAt ?? new Date().toISOString();
+          const nextHit = { ...hit, cachedAt: stamp };
+          const modCache = { ...s.modCache };
+          for (const key of ["all", hit.source] as DiscoverSource[]) {
+            const bucket = modCache[key];
+            if (!bucket) {
+              if (key === hit.source || key === "all") {
+                modCache[key] = {
+                  query: "",
+                  hits: [nextHit],
+                  live: false,
+                  note: "Cached from a store page.",
+                  fetchedAt: stamp,
+                };
+              }
+              continue;
+            }
+            const idx = bucket.hits.findIndex(
+              (h) => h.id === nextHit.id || (h.source === nextHit.source && h.sourceId === nextHit.sourceId),
+            );
+            const hits = [...bucket.hits];
+            if (idx >= 0) hits[idx] = { ...hits[idx], ...nextHit };
+            else hits.unshift(nextHit);
+            modCache[key] = { ...bucket, hits, fetchedAt: stamp };
+          }
+          return { modCache };
+        }),
+      setPeekHit: (hit) => set({ peekHit: hit }),
       createBackup: (kind, label) =>
         set((s) => {
           const active = s.worlds.find((w) => w.active) ?? s.worlds[0];
@@ -1147,6 +1457,7 @@ export const useAppStore = create<Store>()(
           };
           return {
             backups: [backup, ...s.backups],
+            lastBackupAt: new Date().toISOString(),
             logs: pushLog(s.logs, {
               level: "ok",
               source: "backup",
@@ -1181,6 +1492,7 @@ export const useAppStore = create<Store>()(
         set((s) => ({ launchArgs: [...s.launchArgs, addCustomArg(flag, value)] })),
       removeLaunchArg: (id) =>
         set((s) => ({ launchArgs: s.launchArgs.filter((a) => a.id !== id) })),
+      replaceLaunchArgs: (args) => set({ launchArgs: args }),
       applyPreset: (id) =>
         set((s) => {
           const preset = OPTIMIZE_PRESETS.find((p) => p.id === id);
@@ -1239,6 +1551,31 @@ export const useAppStore = create<Store>()(
           return {
             ...next,
             worldSettings,
+          };
+        }),
+      commitWorldSettings: (values) =>
+        set((s) => {
+          const worldSettings = s.worldSettings.map((st) =>
+            values[st.key] !== undefined ? { ...st, value: values[st.key] } : st,
+          );
+          const name = worldSettings.find((st) => st.key === "ServerName")?.value;
+          const desc = worldSettings.find((st) => st.key === "ServerDescription")?.value;
+          const port = Number(worldSettings.find((st) => st.key === "PublicPort")?.value);
+          const max = Number(worldSettings.find((st) => st.key === "ServerPlayerMaxNum")?.value);
+          const next = patchInstance(s, s.activeServerId || s.server.id, {
+            name: name || s.server.name,
+            description: desc ?? s.server.description,
+            port: Number.isFinite(port) && port > 0 ? port : s.server.port,
+            maxPlayers: Number.isFinite(max) && max > 0 ? max : s.server.maxPlayers,
+          });
+          return {
+            ...next,
+            worldSettings,
+            logs: pushLog(s.logs, {
+              level: "ok",
+              source: "ini",
+              message: "Saved PalWorldSettings.ini and WorldOption.sav keys.",
+            }),
           };
         }),
       importIni: (raw) => {
@@ -1407,6 +1744,94 @@ export const useAppStore = create<Store>()(
         set((s) => ({
           engineTweaks: s.engineTweaks.map((t) => (t.id === id ? { ...t, ...patch } : t)),
         })),
+      setFx: (patch) =>
+        set((s) => ({ fx: { ...mergeFx(s.fx), ...patch } })),
+      addEngineBlock: (block) =>
+        set((s) => {
+          const fx = mergeFx(s.fx);
+          const next: EngineBlock = {
+            id: block.id ?? nid("blk"),
+            name: block.name,
+            version: block.version,
+            source: block.source,
+            target: block.target,
+            lines: block.lines,
+            enabled: block.enabled,
+          };
+          return {
+            fx: { ...fx, engineBlocks: [...fx.engineBlocks, next] },
+            logs: pushLog(s.logs, { level: "ok", source: "engine", message: `Added Engine.ini block ${next.name}.` }),
+          };
+        }),
+      moveEngineBlock: (id, dir) =>
+        set((s) => {
+          const fx = mergeFx(s.fx);
+          const list = [...fx.engineBlocks];
+          const i = list.findIndex((b) => b.id === id);
+          if (i < 0) return s;
+          const j = i + dir;
+          if (j < 0 || j >= list.length) return s;
+          const tmp = list[i];
+          list[i] = list[j];
+          list[j] = tmp;
+          return { fx: { ...fx, engineBlocks: list } };
+        }),
+      removeEngineBlock: (id) =>
+        set((s) => {
+          const fx = mergeFx(s.fx);
+          return { fx: { ...fx, engineBlocks: fx.engineBlocks.filter((b) => b.id !== id) } };
+        }),
+      identifyFile: (id, name) => {
+        const s = get();
+        const fx = mergeFx(s.fx);
+        const file = fx.unidentified.find((u) => u.id === id);
+        if (!file) return;
+        const label = name?.trim() || file.path.split(/[\\/]/).pop() || "Unknown file";
+        const kind = (file.kind === "palschema" || file.kind === "pak" || file.kind === "ue4ss" || file.kind === "ini" ? file.kind : "pak") as InstalledMod["kind"];
+        get().installHit(
+          {
+            id: `local-${id}`,
+            name: label.replace(/\.[^.]+$/, ""),
+            author: "Local",
+            version: "1.0",
+            source: "local",
+            sourceId: file.path,
+            url: "",
+            downloads: 0,
+            description: `Identified from ${file.path}`,
+            kind,
+            updatedAt: new Date().toISOString(),
+            serverCompatible: true,
+            gameVersions: [s.server.version],
+            requires: [],
+          },
+          s.mode === "client" ? "client" : s.mode === "server" ? "server" : "both",
+        );
+        set((st) => {
+          const next = mergeFx(st.fx);
+          return {
+            fx: {
+              ...next,
+              unidentified: next.unidentified.filter((u) => u.id !== id),
+              history: pushHistory(next.history, {
+                name: label,
+                action: "identify",
+                detail: `Identified ${file.path} as a local ${kind} drop.`,
+              }),
+            },
+            logs: pushLog(st.logs, {
+              level: "ok",
+              source: "mods",
+              message: `Identified ${file.path} as ${kind} and added it to Installed.`,
+            }),
+          };
+        });
+      },
+      dismissUnidentified: (id) =>
+        set((s) => {
+          const fx = mergeFx(s.fx);
+          return { fx: { ...fx, unidentified: fx.unidentified.filter((u) => u.id !== id) } };
+        }),
       tickMonitor: () =>
         set((s) => {
           const fleet = fleetOf(s);
@@ -1438,6 +1863,16 @@ export const useAppStore = create<Store>()(
               consoleLines[inst.id] = [...prev, ...rows].slice(-120);
             }
           }
+          const extraLogs: LogEntry[] = [];
+          if (running.length && Math.random() < 0.2) {
+            extraLogs.push({
+              id: nid("log"),
+              ts: new Date().toISOString(),
+              level: "info",
+              source: Math.random() < 0.5 ? "pal" : "server-ue4ss",
+              message: tickConsoleLine(players, restOn),
+            });
+          }
           return {
             monitor: {
               samples: appendSample(monitor.samples, sample),
@@ -1449,6 +1884,7 @@ export const useAppStore = create<Store>()(
             },
             consoleLines,
             ops,
+            logs: extraLogs.length ? [...extraLogs, ...s.logs].slice(0, MAX_LOGS) : s.logs,
           };
         }),
       setMonitorThresholds: (patch) =>
@@ -1532,7 +1968,14 @@ export const useAppStore = create<Store>()(
           ],
           logs: pushLog(s.logs, { level: "warn", source: "ban", message: `Banned ${entry.name || entry.steamId}.` }),
         })),
-      removeBan: (id) => set((s) => ({ bans: (s.bans ?? []).filter((b) => b.id !== id) })),
+      removeBan: (id) =>
+        set((s) => {
+          const row = (s.bans ?? []).find((b) => b.id === id);
+          return {
+            bans: (s.bans ?? []).filter((b) => b.id !== id),
+            logs: pushLog(s.logs, { level: "ok", source: "ban", message: `Unbanned ${row?.name || row?.steamId || id}.` }),
+          };
+        }),
       setAllow: (ids) => set({ allow: ids }),
       kick: (playerId, serverId) =>
         set((s) => {
@@ -1609,13 +2052,13 @@ export const useAppStore = create<Store>()(
           const oldGuild = player.guild;
           const players = prev.players.map((p) => (p.id === playerId ? { ...p, guild: guildName } : p));
           let guilds = prev.guilds.map((g) => {
-            let members = g.members;
-            if (oldGuild && g.name === oldGuild) members = Math.max(0, members - 1);
-            if (guildName && g.name === guildName) members += 1;
-            return { ...g, members };
+            const ids = new Set(g.memberIds ?? []);
+            if (oldGuild && g.name === oldGuild) ids.delete(playerId);
+            if (guildName && g.name === guildName) ids.add(playerId);
+            return { ...g, memberIds: [...ids], members: ids.size };
           });
           if (guildName && !guilds.some((g) => g.name === guildName)) {
-            guilds = [...guilds, { id: nid("g"), name: guildName, owner: player.name, members: 1, bases: 0 }];
+            guilds = [...guilds, { id: nid("g"), name: guildName, owner: player.name, members: 1, memberIds: [playerId], bases: 0 }];
           }
           return {
             worldSaves: { ...s.worldSaves, [worldId]: { ...prev, players, guilds } },
@@ -1627,22 +2070,39 @@ export const useAppStore = create<Store>()(
             }),
           };
         }),
+      addGuildMember: (worldId, guildId, playerId) => {
+        const s = get();
+        const save = s.worldSaves[worldId];
+        const guild = save?.guilds.find((g) => g.id === guildId);
+        if (!guild) return;
+        get().assignPlayerToGuild(worldId, playerId, guild.name);
+      },
+      removeGuildMember: (worldId, guildId, playerId) => {
+        const s = get();
+        const save = s.worldSaves[worldId];
+        const guild = save?.guilds.find((g) => g.id === guildId);
+        const player = save?.players.find((p) => p.id === playerId);
+        if (!guild || !player) return;
+        if (player.guild !== guild.name) return;
+        get().assignPlayerToGuild(worldId, playerId, "");
+      },
       banPlayer: (playerId, serverId, reason) => {
         const s = get();
         const id = serverId || s.activeServerId || s.server.id;
         const inst = fleetOf(s).find((i) => i.id === id);
         const player = inst?.players.find((p) => p.playerId === playerId);
         get().addBan({
-          steamId: playerId,
+          steamId: player?.userId || playerId,
           name: player?.name || playerId,
           reason: reason || "Banned from dashboard",
         });
         get().kick(playerId, id);
+        get().writeDenFiles(id);
       },
       resetAll: () => set({ ...emptyState(), hydrateReady: true }),
     }),
     {
-      name: "palnest-v12",
+      name: "palnest-v14",
       storage: createJSONStorage(() => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         let pending: { name: string; value: string } | null = null;
@@ -1653,7 +2113,7 @@ export const useAppStore = create<Store>()(
         };
         return {
           getItem: (name) =>
-            localStorage.getItem(name) ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
+            localStorage.getItem(name) ?? localStorage.getItem("palnest-v13") ?? localStorage.getItem("palnest-v12") ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
           setItem: (name, value) => {
             pending = { name, value };
             if (timer) clearTimeout(timer);
@@ -1663,6 +2123,7 @@ export const useAppStore = create<Store>()(
             if (timer) clearTimeout(timer);
             pending = null;
             localStorage.removeItem(name);
+            localStorage.removeItem("palnest-v13");
             localStorage.removeItem("palnest-v11");
             localStorage.removeItem("palnest-v10");
           },
@@ -1710,7 +2171,27 @@ export const useAppStore = create<Store>()(
                 : Math.max(10, Math.round((state.ops?.scheduleBackupHours ?? 6) * 60)),
             scheduleBackupOn: state.ops?.scheduleBackupOn !== false,
             scheduleRestartOn: Boolean(state.ops?.scheduleRestartOn),
+            scheduleRestartMode: state.ops?.scheduleRestartMode === "interval" ? "interval" : "times",
+            scheduleRestartTimes: state.ops?.scheduleRestartTimes?.length
+              ? state.ops.scheduleRestartTimes
+              : state.ops?.scheduleRestart
+                ? [state.ops.scheduleRestart]
+                : [],
             backupPath: state.ops?.backupPath ?? "",
+          },
+          fx: mergeFx(state.fx),
+          keys: {
+            nexus: state.keys?.nexus ?? "",
+            curseforge: state.keys?.curseforge ?? "",
+            steam: state.keys?.steam ?? "",
+          },
+          frameworks: {
+            ...frameworksEmpty(),
+            ...state.frameworks,
+            ue4ss: { ...frameworksEmpty().ue4ss, ...state.frameworks?.ue4ss },
+            palschema: { ...frameworksEmpty().palschema, ...state.frameworks?.palschema },
+            reshade: { ...frameworksEmpty().reshade, ...state.frameworks?.reshade },
+            optiscaler: { ...frameworksEmpty().optiscaler, ...state.frameworks?.optiscaler },
           },
           profiles: state.profiles ?? [],
           bans: state.bans ?? [],
@@ -1719,6 +2200,8 @@ export const useAppStore = create<Store>()(
           denSettings: state.denSettings ?? {},
           lastBackupAt: state.lastBackupAt ?? null,
           lastRestartDay: state.lastRestartDay ?? "",
+          modCache: state.modCache ?? {},
+          peekHit: null,
           hydrateReady: true,
         });
       },
@@ -1744,7 +2227,7 @@ export const useAppStore = create<Store>()(
         worldSettings: s.worldSettings,
         worldSaves: s.worldSaves,
         engineTweaks: s.engineTweaks,
-        logs: s.logs.slice(0, 80),
+        logs: s.logs.slice(0, 200),
         ops: s.ops,
         profiles: s.profiles,
         bans: s.bans,
@@ -1755,6 +2238,8 @@ export const useAppStore = create<Store>()(
         denSettings: s.denSettings,
         lastBackupAt: s.lastBackupAt,
         lastRestartDay: s.lastRestartDay,
+        fx: s.fx,
+        modCache: s.modCache,
         monitor: s.monitor
           ? { session: s.monitor.session, thresholds: s.monitor.thresholds, samples: s.monitor.samples.slice(-120) }
           : undefined,

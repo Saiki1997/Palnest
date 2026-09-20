@@ -10,9 +10,16 @@ export function parseModQuery(raw: string): ParsedModQuery {
   const text = raw.trim();
   if (!text) return { text: "" };
 
-  const steam = text.match(/(?:steamcommunity\.com\/(?:sharedfiles|workshop)\/filedetails\/\?id=|workshop\/filedetails\/\?id=)(\d{6,})/i);
+  const steam = text.match(
+    /(?:steamcommunity\.com\/(?:sharedfiles|workshop)\/filedetails\/\?id=|workshop\/filedetails\/\?id=)(\d{6,})/i,
+  );
   if (steam) {
-    return { text, source: "steam", sourceId: steam[1], url: `https://steamcommunity.com/sharedfiles/filedetails/?id=${steam[1]}` };
+    return {
+      text,
+      source: "steam",
+      sourceId: steam[1],
+      url: `https://steamcommunity.com/sharedfiles/filedetails/?id=${steam[1]}`,
+    };
   }
 
   const nexus = text.match(/nexusmods\.com\/palworld\/mods\/(\d+)/i);
@@ -20,7 +27,9 @@ export function parseModQuery(raw: string): ParsedModQuery {
     return { text, source: "nexus", sourceId: nexus[1], url: `https://www.nexusmods.com/palworld/mods/${nexus[1]}` };
   }
 
-  const curse = text.match(/curseforge\.com\/minecraft\/mc-mods\/|curseforge\.com\/[^/]+\/palworld[^/]*\/(?:mods|projects)\/([^/?#]+)/i);
+  const curse = text.match(
+    /curseforge\.com\/(?:minecraft\/mc-mods\/|[^/]+\/)?palworld[^/]*\/(?:mods|projects)\/([^/?#]+)/i,
+  );
   if (curse?.[1]) {
     return { text, source: "curseforge", sourceId: curse[1], url: text };
   }
@@ -73,7 +82,11 @@ export function matchesModQuery(
   if (parsed.source && parsed.source !== mod.source && source && parsed.source !== source) return false;
   if (parsed.sourceId) {
     const id = parsed.sourceId.toLowerCase();
-    if (mod.sourceId.toLowerCase() === id || mod.id.toLowerCase().includes(id) || (mod.url && mod.url.includes(parsed.sourceId))) {
+    if (
+      mod.sourceId.toLowerCase() === id ||
+      mod.id.toLowerCase().includes(id) ||
+      (mod.url && mod.url.includes(parsed.sourceId))
+    ) {
       return !parsed.source || parsed.source === mod.source || !source;
     }
     if (!query.trim() || parsed.text === parsed.sourceId) return false;
@@ -81,4 +94,32 @@ export function matchesModQuery(
   const q = (parsed.sourceId ? parsed.text : query).trim().toLowerCase();
   if (!q) return true;
   return catalogQueryHaystack(mod).includes(q);
+}
+
+export function parseDiscoverId(raw: string): {
+  source?: "nexus" | "steam" | "curseforge";
+  sourceId?: string;
+  raw: string;
+} {
+  const decoded = decodeURIComponent(raw || "");
+  const tagged = decoded.match(/^(nexus|steam|curseforge)--(.+)$/i);
+  if (tagged) {
+    return {
+      source: tagged[1].toLowerCase() as "nexus" | "steam" | "curseforge",
+      sourceId: tagged[2],
+      raw: decoded,
+    };
+  }
+  const nx = decoded.match(/^(?:nx[-_]|nexus[-_])(?:live[-_]|id[-_])?(\d+)$/i);
+  if (nx) return { source: "nexus", sourceId: nx[1], raw: decoded };
+  const st = decoded.match(/^(?:st[-_]|steam[-_]|workshop[-_])(?:live[-_])?(\d+)$/i);
+  if (st) return { source: "steam", sourceId: st[1], raw: decoded };
+  const cf = decoded.match(/^(?:cf[-_]|curseforge[-_])(?:live[-_])?(\d+)$/i);
+  if (cf) return { source: "curseforge", sourceId: cf[1], raw: decoded };
+  if (/^\d{3,}$/.test(decoded)) return { sourceId: decoded, raw: decoded };
+  return { raw: decoded };
+}
+
+export function discoverPathId(source: string, sourceId: string) {
+  return `${source}--${sourceId}`;
 }

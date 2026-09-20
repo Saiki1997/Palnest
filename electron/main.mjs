@@ -3,9 +3,9 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
-import { registerHost, shouldCloseToTray, stopAllHost } from "./host.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { registerHost, shouldCloseToTray, stopAllHost } from "./host.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.PALNEST_DEV_URL || "http://127.0.0.1:8080";
@@ -17,6 +17,7 @@ app.commandLine.appendSwitch("disable-features", "Translate,MediaRouter,SpareRen
 
 let mainWindow = null;
 let nitroChild = null;
+let nitroTail = "";
 
 function resourceIcon() {
   const packed = path.join(__dirname, "resources", "icon.png");
@@ -25,19 +26,15 @@ function resourceIcon() {
 
 function hostRoot() {
   if (app.isPackaged) return path.join(process.resourcesPath, "host");
-  const local = path.join(__dirname, "..", "publish", "win-x64");
-  if (fs.existsSync(path.join(local, "Palnest.exe")) || fs.existsSync(path.join(local, "Palnest"))) return local;
-  return path.join(__dirname, "..", "Palnest.App");
+  const local = path.join(__dirname, "..", "desktop-host");
+  if (fs.existsSync(path.join(local, "serve.mjs"))) return local;
+  return path.join(__dirname, "..", ".vercel", "output");
 }
 
-function hostEntry() {
-  const root = hostRoot();
-  const win = path.join(root, "Palnest.exe");
-  const unix = path.join(root, "Palnest");
-  if (process.platform === "win32") return win;
-  if (fs.existsSync(unix)) return unix;
-  if (fs.existsSync(win)) return win;
-  return unix;
+function serveEntry() {
+  const fromHost = path.join(hostRoot(), "serve.mjs");
+  if (fs.existsSync(fromHost)) return fromHost;
+  return path.join(__dirname, "serve.mjs");
 }
 
 function findFreePort(start = 47821) {
@@ -62,11 +59,7 @@ function waitForHttp(url, timeoutMs = 20000) {
   return new Promise((resolve, reject) => {
     const tick = () => {
       if (nitroChild && nitroChild.exitCode != null) {
-        reject(
-          new Error(
-            `The local den exited before it was ready (code ${nitroChild.exitCode}).${tailHint()}`,
-          ),
-        );
+        reject(new Error(`The local den exited before it was ready (code ${nitroChild.exitCode}).${tailHint()}`));
         return;
       }
       const req = http.get(url, (res) => {
@@ -108,8 +101,6 @@ function ping(url) {
   });
 }
 
-let nitroTail = "";
-
 function noteNitro(buf) {
   const text = String(buf);
   nitroTail = (nitroTail + text).slice(-2500);
@@ -122,28 +113,27 @@ function tailHint() {
 }
 
 function startNitro(port) {
-  const entry = hostEntry();
+  const entry = serveEntry();
+  const cwd = hostRoot();
   if (!fs.existsSync(entry)) {
     throw new Error("Palnest desktop files are missing. Rebuild the Windows package.");
   }
-  const cwd = hostRoot();
   nitroTail = "";
-  const isDotnet = /\.exe$/i.test(entry) || path.basename(entry) === "Palnest";
-  nitroChild = spawn(entry, [], {
+  nitroChild = spawn(process.execPath, [entry], {
     cwd,
     env: {
       ...process.env,
+      ELECTRON_RUN_AS_NODE: "1",
       PALNEST_DESKTOP: "1",
-      ASPNETCORE_URLS: `http://127.0.0.1:${port}`,
-      ASPNETCORE_ENVIRONMENT: "Production",
-      DOTNET_NOLOGO: "1",
+      PALNEST_HOST_ROOT: cwd,
+      PORT: String(port),
+      HOST: "127.0.0.1",
+      NITRO_PORT: String(port),
+      NITRO_HOST: "127.0.0.1",
     },
     stdio: ["ignore", "pipe", "pipe"],
     windowsHide: true,
   });
-  if (!isDotnet) {
-    /* kept for local fallback */
-  }
   nitroChild.stdout?.on("data", noteNitro);
   nitroChild.stderr?.on("data", noteNitro);
   nitroChild.on("exit", (code) => {
@@ -242,10 +232,7 @@ function skipChild(parentName, childName) {
 function resolveInstallRoot(root) {
   const tries = [root, path.join(root, "Palworld"), path.join(root, "PalServer")];
   for (const candidate of tries) {
-    if (
-      fs.existsSync(path.join(candidate, "Pal", "Binaries")) ||
-      fs.existsSync(path.join(candidate, "Pal", "Content"))
-    ) {
+    if (fs.existsSync(path.join(candidate, "Pal", "Binaries")) || fs.existsSync(path.join(candidate, "Pal", "Content"))) {
       return candidate;
     }
   }

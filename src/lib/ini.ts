@@ -214,6 +214,125 @@ export function groupedSettings(settings: WorldSetting[]): [string, WorldSetting
   return [...g.entries()];
 }
 
+export const EDITOR_GROUPS = [
+  "General",
+  "Combat & difficulty",
+  "Pals",
+  "Player",
+  "Base & building",
+  "Items & gathering",
+  "Travel & world",
+  "Server & multiplayer",
+  "Advanced",
+] as const;
+
+const KEY_EDITOR_GROUP: Record<string, (typeof EDITOR_GROUPS)[number]> = {
+  DayTimeSpeedRate: "General",
+  NightTimeSpeedRate: "General",
+  ExpRate: "General",
+  AutoSaveSpan: "General",
+  Difficulty: "General",
+  ServerName: "General",
+  ServerDescription: "General",
+  PlayerDamageRateAttack: "Combat & difficulty",
+  PlayerDamageRateDefense: "Combat & difficulty",
+  PalDamageRateAttack: "Combat & difficulty",
+  PalDamageRateDefense: "Combat & difficulty",
+  DeathPenalty: "Combat & difficulty",
+  bEnableInvaderEnemy: "Combat & difficulty",
+  EnablePredatorBossPal: "Combat & difficulty",
+  bHardcore: "Combat & difficulty",
+  bPalLost: "Combat & difficulty",
+  bIsPvP: "Combat & difficulty",
+  PalCaptureRate: "Pals",
+  PalSpawnNumRate: "Pals",
+  PalStomachDecreaceRate: "Pals",
+  PalStaminaDecreaceRate: "Pals",
+  PalAutoHPRegeneRate: "Pals",
+  PalAutoHpRegeneRateInSleep: "Pals",
+  PalEggDefaultHatchingTime: "Pals",
+  WorkSpeedRate: "Pals",
+  MonsterFarmActionSpeedRate: "Pals",
+  PlayerStomachDecreaceRate: "Player",
+  PlayerStaminaDecreaceRate: "Player",
+  PlayerAutoHPRegeneRate: "Player",
+  PlayerAutoHpRegeneRateInSleep: "Player",
+  ItemWeightRate: "Player",
+  bAllowEnhanceStat_Health: "Player",
+  bAllowEnhanceStat_Attack: "Player",
+  bAllowEnhanceStat_Stamina: "Player",
+  bAllowEnhanceStat_Weight: "Player",
+  bAllowEnhanceStat_WorkSpeed: "Player",
+  BaseCampMaxNum: "Base & building",
+  BaseCampMaxNumInGuild: "Base & building",
+  BaseCampWorkerMaxNum: "Base & building",
+  MaxBuildingLimitNum: "Base & building",
+  BuildObjectHpRate: "Base & building",
+  BuildObjectDamageRate: "Base & building",
+  BuildObjectDeteriorationDamageRate: "Base & building",
+  bBuildAreaLimit: "Base & building",
+  CollectionDropRate: "Items & gathering",
+  CollectionObjectHpRate: "Items & gathering",
+  CollectionObjectRespawnSpeedRate: "Items & gathering",
+  EnemyDropItemRate: "Items & gathering",
+  DropItemMaxNum: "Items & gathering",
+  DropItemAliveMaxHours: "Items & gathering",
+  EquipmentDurabilityDamageRate: "Items & gathering",
+  ItemCorruptionMultiplier: "Items & gathering",
+  bEnableFastTravel: "Travel & world",
+  bEnableFastTravelOnlyBaseCamp: "Travel & world",
+  bIsStartLocationSelectByMap: "Travel & world",
+  SupplyDropSpan: "Travel & world",
+  RandomizerType: "Travel & world",
+  RandomizerSeed: "Travel & world",
+  ServerPlayerMaxNum: "Server & multiplayer",
+  CoopPlayerMaxNum: "Server & multiplayer",
+  GuildPlayerMaxNum: "Server & multiplayer",
+  PublicPort: "Server & multiplayer",
+  RESTAPIEnabled: "Server & multiplayer",
+  RESTAPIPort: "Server & multiplayer",
+  RCONEnabled: "Server & multiplayer",
+  RCONPort: "Server & multiplayer",
+  ServerPassword: "Server & multiplayer",
+  AdminPassword: "Server & multiplayer",
+  bAllowClientMod: "Server & multiplayer",
+  bEnableVoiceChat: "Server & multiplayer",
+};
+
+const GROUP_FALLBACK: Record<string, (typeof EDITOR_GROUPS)[number]> = {
+  Identity: "General",
+  Rates: "General",
+  Damage: "Combat & difficulty",
+  Survival: "Player",
+  Rules: "Combat & difficulty",
+  Population: "Server & multiplayer",
+  Network: "Server & multiplayer",
+  Drops: "Items & gathering",
+  Guilds: "Server & multiplayer",
+  Palbox: "Pals",
+  PvP: "Combat & difficulty",
+  Voice: "Server & multiplayer",
+  Stats: "Player",
+  Randomizer: "Travel & world",
+  Advanced: "Advanced",
+};
+
+export function editorGroup(s: WorldSetting): (typeof EDITOR_GROUPS)[number] {
+  return KEY_EDITOR_GROUP[s.key] ?? GROUP_FALLBACK[s.group] ?? "Advanced";
+}
+
+export function groupedEditorSettings(settings: WorldSetting[]): [string, WorldSetting[]][] {
+  const buckets = new Map<string, WorldSetting[]>();
+  for (const name of EDITOR_GROUPS) buckets.set(name, []);
+  for (const s of settings) {
+    const g = editorGroup(s);
+    const list = buckets.get(g) ?? [];
+    list.push(s);
+    buckets.set(g, list);
+  }
+  return EDITOR_GROUPS.map((name) => [name, buckets.get(name) ?? []] as [string, WorldSetting[]]).filter(([, rows]) => rows.length);
+}
+
 export function editedCount(settings: WorldSetting[]) {
   return settings.filter((s) => isEdited(s)).length;
 }

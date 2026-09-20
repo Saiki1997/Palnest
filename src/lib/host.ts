@@ -93,6 +93,16 @@ export async function hostRest(url: string, method: string, body?: unknown, user
   return { ok: true, status: 200, body: { simulated: true } };
 }
 
+export async function hostRcon(
+  port: number,
+  password: string,
+  command: string,
+): Promise<{ ok: boolean; body?: string; error?: string; simulated?: boolean }> {
+  const api = desktop();
+  if (api?.rcon) return api.rcon(port, password, command);
+  return { ok: true, simulated: true, body: command };
+}
+
 export async function hostUpnp(port: number, on: boolean): Promise<HostWrite> {
   const api = desktop();
   if (api?.upnp) return api.upnp(port, on);

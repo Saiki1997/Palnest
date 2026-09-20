@@ -24,6 +24,7 @@ import { Route as AppServerRouteImport } from './routes/_app/server'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTunnelsRouteImport } from './routes/_app/tunnels'
 import { Route as AppWorldsRouteImport } from './routes/_app/worlds'
+import { Route as AppDiscoverModIdRouteImport } from './routes/_app/discover.$modId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -99,13 +100,18 @@ const AppWorldsRoute = AppWorldsRouteImport.update({
   path: '/worlds',
   getParentRoute: () => AppRoute,
 } as any)
+const AppDiscoverModIdRoute = AppDiscoverModIdRouteImport.update({
+  id: '/$modId',
+  path: '/$modId',
+  getParentRoute: () => AppDiscoverRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/setup': typeof SetupRoute
   '/status': typeof StatusRoute
   '/checker': typeof AppCheckerRoute
-  '/discover': typeof AppDiscoverRoute
+  '/discover': typeof AppDiscoverRouteWithChildren
   '/frameworks': typeof AppFrameworksRoute
   '/logs': typeof AppLogsRoute
   '/mods': typeof AppModsRoute
@@ -115,12 +121,13 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AppSettingsRoute
   '/tunnels': typeof AppTunnelsRoute
   '/worlds': typeof AppWorldsRoute
+  '/discover/$modId': typeof AppDiscoverModIdRoute
 }
 export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/status': typeof StatusRoute
   '/checker': typeof AppCheckerRoute
-  '/discover': typeof AppDiscoverRoute
+  '/discover': typeof AppDiscoverRouteWithChildren
   '/frameworks': typeof AppFrameworksRoute
   '/logs': typeof AppLogsRoute
   '/mods': typeof AppModsRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/tunnels': typeof AppTunnelsRoute
   '/worlds': typeof AppWorldsRoute
   '/': typeof AppIndexRoute
+  '/discover/$modId': typeof AppDiscoverModIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -138,7 +146,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/status': typeof StatusRoute
   '/_app/checker': typeof AppCheckerRoute
-  '/_app/discover': typeof AppDiscoverRoute
+  '/_app/discover': typeof AppDiscoverRouteWithChildren
   '/_app/frameworks': typeof AppFrameworksRoute
   '/_app/logs': typeof AppLogsRoute
   '/_app/mods': typeof AppModsRoute
@@ -149,6 +157,7 @@ export interface FileRoutesById {
   '/_app/tunnels': typeof AppTunnelsRoute
   '/_app/worlds': typeof AppWorldsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/discover/$modId': typeof AppDiscoverModIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/tunnels'
     | '/worlds'
+    | '/discover/$modId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/setup'
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
     | '/tunnels'
     | '/worlds'
     | '/'
+    | '/discover/$modId'
   id:
     | '__root__'
     | '/_app'
@@ -200,6 +211,7 @@ export interface FileRouteTypes {
     | '/_app/tunnels'
     | '/_app/worlds'
     | '/_app/'
+    | '/_app/discover/$modId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -315,12 +327,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppWorldsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/discover/$modId': {
+      id: '/_app/discover/$modId'
+      path: '/$modId'
+      fullPath: '/discover/$modId'
+      preLoaderRoute: typeof AppDiscoverModIdRouteImport
+      parentRoute: typeof AppDiscoverRoute
+    }
   }
 }
 
+interface AppDiscoverRouteChildren {
+  AppDiscoverModIdRoute: typeof AppDiscoverModIdRoute
+}
+
+const AppDiscoverRouteChildren: AppDiscoverRouteChildren = {
+  AppDiscoverModIdRoute: AppDiscoverModIdRoute,
+}
+
+const AppDiscoverRouteWithChildren = AppDiscoverRoute._addFileChildren(
+  AppDiscoverRouteChildren,
+)
+
 interface AppRouteChildren {
   AppCheckerRoute: typeof AppCheckerRoute
-  AppDiscoverRoute: typeof AppDiscoverRoute
+  AppDiscoverRoute: typeof AppDiscoverRouteWithChildren
   AppFrameworksRoute: typeof AppFrameworksRoute
   AppLogsRoute: typeof AppLogsRoute
   AppModsRoute: typeof AppModsRoute
@@ -335,7 +366,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppCheckerRoute: AppCheckerRoute,
-  AppDiscoverRoute: AppDiscoverRoute,
+  AppDiscoverRoute: AppDiscoverRouteWithChildren,
   AppFrameworksRoute: AppFrameworksRoute,
   AppLogsRoute: AppLogsRoute,
   AppModsRoute: AppModsRoute,

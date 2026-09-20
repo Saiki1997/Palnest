@@ -33,8 +33,8 @@ export function emptyAgent(kind: AgentKind, simulated = true): AgentHit {
     running: false,
     path: "",
     note: simulated
-      ? `This preview cannot see your PC. Palnest.exe scans for ${AGENT_NAMES[kind]}.`
-      : `${AGENT_NAMES[kind]} was not found.`,
+      ? `Not detected in this preview. Download ${AGENT_NAMES[kind]}, then Palnest.exe will find it on your PC.`
+      : `${AGENT_NAMES[kind]} was not found. Download the agent, then scan again.`,
     simulated,
   };
 }

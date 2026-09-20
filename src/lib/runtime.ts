@@ -1,12 +1,13 @@
 import { renderArgv, renderCommandLine, tweaksToIni } from "./args";
 import { instanceExe, overlayInstanceArgs } from "./fleet";
-import { hostEnableMod, hostExtractZip, hostKind, hostLaunchGame, hostRest, hostSpawnAgent, hostSpawnPal, hostSteamcmd, hostStopAgent, hostStopPal, hostUdpListen, hostUpnp, hostWriteFile, hostZipDir, hostRestoreZip } from "./host";
+import { hostEnableMod, hostExtractZip, hostKind, hostLaunchGame, hostRcon, hostRest, hostSpawnAgent, hostSpawnPal, hostSteamcmd, hostStopAgent, hostStopPal, hostUdpListen, hostUpnp, hostWriteFile, hostZipDir, hostRestoreZip } from "./host";
 import { tunnelAgentArgv } from "./listen";
 import { settingsToIni } from "./ini";
 import {
   formatBanlist,
   iniDiskPath,
   engineIniPath,
+  clientEngineIniPath,
   linuxStartScript,
   parseRestMetrics,
   parseRestPlayers,
@@ -56,6 +57,8 @@ export async function writeDenToDisk(input: {
   allow: string[];
   linux?: boolean;
   engineTweaks?: EngineTweak[];
+  engineIni?: string;
+  clientEngineIni?: string;
 }) {
   const root = denRoot(input.inst, input.paths);
   if (!root) return { ok: false as const, error: "No PalServer folder." };
@@ -69,19 +72,25 @@ export async function writeDenToDisk(input: {
     ),
     hostWriteFile(`${root}\\Pal\\Saved\\SaveGames\\banlist.txt`, formatBanlist(input.bans)),
   ];
-  if (input.engineTweaks?.length) {
-    writes.push(hostWriteFile(engineIniPath(root, linux), tweaksToIni(input.engineTweaks, "server")));
+  const serverIni = input.engineIni || (input.engineTweaks?.length ? tweaksToIni(input.engineTweaks, "server") : "");
+  if (serverIni) writes.push(hostWriteFile(engineIniPath(root, linux), serverIni));
+  if (input.clientEngineIni && input.paths.client) {
+    writes.push(hostWriteFile(clientEngineIniPath(input.paths.client), input.clientEngineIni));
   }
   if (input.allow.length) {
     writes.push(hostWriteFile(`${root}\\Pal\\Saved\\Config\\allowlist.txt`, `${input.allow.join("\n")}\n`));
   }
   if (input.world) {
     writes.push(
-      encodeWorldOptionSav(input.settings).then((bytes) => hostWriteFile(worldOptionPath(root, input.world!.guid), bytes)),
       encodeLevelMetaSav({ worldName: input.world.name, inGameDay: input.world.days }).then((bytes) =>
         hostWriteFile(levelMetaPath(root, input.world!.guid), bytes),
       ),
     );
+    if (input.world.optionOverride !== false) {
+      writes.push(
+        encodeWorldOptionSav(input.settings).then((bytes) => hostWriteFile(worldOptionPath(root, input.world!.guid), bytes)),
+      );
+    }
   }
   if (linux) {
     writes.push(
@@ -161,6 +170,57 @@ export async function restAnnounce(inst: ServerState, settings: WorldSetting[], 
 export async function restKick(inst: ServerState, settings: WorldSetting[], playerId: string) {
   const { user, pass } = restCreds(settings);
   return hostRest(restUrl(inst.restPort, REST_PATHS.kick), "POST", { userid: playerId }, user, pass);
+}
+
+export async function restBan(inst: ServerState, settings: WorldSetting[], playerId: string) {
+  const { user, pass } = restCreds(settings);
+  return hostRest(restUrl(inst.restPort, REST_PATHS.ban), "POST", { userid: playerId }, user, pass);
+}
+
+export async function restUnban(inst: ServerState, settings: WorldSetting[], playerId: string) {
+  const { user, pass } = restCreds(settings);
+  return hostRest(restUrl(inst.restPort, REST_PATHS.unban), "POST", { userid: playerId }, user, pass);
+}
+
+export async function sendRcon(
+  inst: Pick<ServerState, "rconPort" | "restPort" | "name" | "running" | "players">,
+  settings: WorldSetting[],
+  command: string,
+) {
+  const cmd = command.trim();
+  if (!cmd) return { ok: false, error: "Empty command" };
+  const pass = settings.find((s) => s.key === "AdminPassword")?.value || "";
+  const enabled = settings.find((s) => s.key === "RCONEnabled")?.value === "True";
+  const desktop = hostKind() === "desktop";
+  if (desktop && !enabled) {
+    return { ok: false, error: "RCONEnabled is False in PalWorldSettings.ini." };
+  }
+  const hit = await hostRcon(inst.rconPort, pass, cmd);
+  if (hit.simulated) {
+    const lower = cmd.toLowerCase();
+    if (lower.startsWith("broadcast ")) {
+      const msg = cmd.slice(10).trim();
+      void restAnnounce(inst as ServerState, settings, msg);
+      return { ok: true, simulated: true, body: `Broadcast: ${msg}` };
+    }
+    if (lower === "save") {
+      void restSave(inst as ServerState, settings);
+      return { ok: true, simulated: true, body: "Save requested." };
+    }
+    if (lower === "info") {
+      return {
+        ok: true,
+        simulated: true,
+        body: `${inst.name} · RCON ${inst.rconPort} · ${inst.running ? "running" : "stopped"} · ${inst.players.filter((p) => p.online).length} online`,
+      };
+    }
+    if (lower === "showplayers") {
+      const rows = inst.players.filter((p) => p.online).map((p) => `${p.name}, ${p.playerId}`);
+      return { ok: true, simulated: true, body: rows.join("\n") || "No players." };
+    }
+    return { ok: true, simulated: true, body: `(preview) ${cmd}` };
+  }
+  return hit;
 }
 
 export async function restSave(inst: ServerState, settings: WorldSetting[]) {

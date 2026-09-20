@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { StatusPips, useFleet } from "@/components/fleet-bar";
@@ -14,7 +15,7 @@ import { useAppStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { TunnelProvider } from "@/lib/types";
 import { hostDetectAgents } from "@/lib/host";
-import { emptyAgentScan, type AgentScan } from "@/lib/agents";
+import { emptyAgentScan, type AgentHit, type AgentScan } from "@/lib/agents";
 
 export const Route = createFileRoute("/_app/tunnels")({ component: TunnelsPage });
 
@@ -39,32 +40,61 @@ function TunnelsPage() {
   const [picked, setPicked] = useState<string>(activeId);
   const [agents, setAgents] = useState<AgentScan>(() => emptyAgentScan(true));
   const [scanning, setScanning] = useState(false);
+  const lastFound = useRef("");
 
-  function scanAgents() {
+  function applyScan(hit: AgentScan, announce: boolean) {
+    setAgents(hit);
+    const st = useAppStore.getState();
+    for (const box of st.instances?.length ? st.instances : [st.server]) {
+      const kind = box.tunnel.provider;
+      if (kind !== "playit" && kind !== "portwarp") continue;
+      const agent = kind === "playit" ? hit.playit : hit.portwarp;
+      if ((agent.installed || agent.running) && !box.tunnel.agentInstalled) {
+        st.patchServer(box.id, {
+          tunnel: { ...box.tunnel, agentInstalled: true, agentVersion: agent.path || "detected" },
+        });
+      }
+    }
+    const found = [
+      hit.portwarp.running || hit.portwarp.installed ? `PortWarp ${hit.portwarp.running ? "running" : "installed"}` : "",
+      hit.playit.running || hit.playit.installed ? `playit ${hit.playit.running ? "running" : "installed"}` : "",
+    ].filter(Boolean);
+    const key = found.join(" · ");
+    if (announce) {
+      if (found.length) toast.success(key);
+      else toast.message(hit.simulated ? "Can't see this PC from the preview. Download an agent, then scan in Palnest.exe." : "No PortWarp or playit found — download one below.");
+    } else if (key && key !== lastFound.current) {
+      toast.success(`Detected ${key}`);
+    }
+    lastFound.current = key;
+  }
+
+  function scanAgents(announce = true) {
     setScanning(true);
     void hostDetectAgents()
-      .then((hit) => {
-        setAgents(hit);
-        if (hit.playit.installed || hit.portwarp.installed) {
-          toast.success(
-            [
-              hit.portwarp.running || hit.portwarp.installed ? `PortWarp ${hit.portwarp.running ? "running" : "installed"}` : "",
-              hit.playit.running || hit.playit.installed ? `playit ${hit.playit.running ? "running" : "installed"}` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ") || "Scan complete",
-          );
-        } else {
-          toast.message(hit.simulated ? "This preview cannot see tunnel apps on your PC. Palnest.exe will." : "No PortWarp or playit found.");
-        }
-      })
+      .then((hit) => applyScan(hit, announce))
       .finally(() => setScanning(false));
   }
 
   useEffect(() => {
-    scanAgents();
+    scanAgents(false);
+    function onFocus() {
+      void hostDetectAgents().then((hit) => applyScan(hit, false));
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const missingAgents = !agents.playit.installed && !agents.portwarp.installed;
+  useEffect(() => {
+    if (!missingAgents) return;
+    const id = window.setInterval(() => {
+      void hostDetectAgents().then((hit) => applyScan(hit, false));
+    }, 8000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingAgents]);
 
   if (mode === "client") return <Navigate to="/" />;
 
@@ -74,7 +104,9 @@ function TunnelsPage() {
       <div>
         <PageHeader title="Tunnels" description="Create a dedicated world first." />
         <Button asChild>
-          <Link to="/server">Open Server</Link>
+          <Link to="/server" search={{ tab: "ops" }}>
+            Open Server
+          </Link>
         </Button>
       </div>
     );
@@ -102,56 +134,31 @@ function TunnelsPage() {
       <section className="mb-6 rounded-xl border border-border bg-card p-5">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="font-medium">Detected on this PC</h2>
+            <h2 className="font-medium">Tunnel agents</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Palnest.exe looks for playit.exe, pwrp.exe, and portwarp.exe — including copies already running.
+              Palnest scans for playit.exe, pwrp.exe, and portwarp.exe. Missing agents show a download — install, then this page picks them up automatically.
             </p>
           </div>
-          <Button size="sm" variant="outline" disabled={scanning} onClick={() => scanAgents()}>
+          <Button size="sm" variant="outline" disabled={scanning} onClick={() => scanAgents(true)}>
             {scanning ? "Scanning…" : "Scan again"}
           </Button>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
-          {([agents.portwarp, agents.playit] as const).map((hit) => (
-            <article key={hit.kind} className="rounded-md border border-border bg-background p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="font-medium">{hit.name}</p>
-                <Badge variant={hit.running ? "ok" : hit.installed ? "outline" : "outline"}>
-                  {hit.running ? "Running" : hit.installed ? "Installed" : agents.simulated ? "Preview" : "Not found"}
-                </Badge>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">{hit.note}</p>
-              {hit.path ? <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{hit.path}</p> : null}
-            </article>
+          {TUNNEL_PROVIDERS.map((p) => (
+            <AgentDetectCard
+              key={p.id}
+              provider={p}
+              hit={p.id === "playit" ? agents.playit : agents.portwarp}
+              scanning={scanning}
+              onUse={() => {
+                setTunnelProvider(inst.id, p.id);
+                toast.success(`${p.name} selected for ${inst.name}`);
+              }}
+              selected={inst.tunnel.provider === p.id}
+            />
           ))}
         </div>
       </section>
-
-      <div className="mb-6 grid gap-3 lg:grid-cols-2">
-        {TUNNEL_PROVIDERS.map((p) => (
-          <article key={p.id} className="rounded-xl border border-border bg-card p-5">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <h2 className="font-medium">{p.name}</h2>
-                <p className="mt-1 text-sm text-muted-foreground">{p.blurb}</p>
-              </div>
-              <Badge variant="outline">{p.protocol}</Badge>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <a href={p.download} target="_blank" rel="noreferrer">
-                  Download agent
-                </a>
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <a href={p.url} target="_blank" rel="noreferrer">
-                  Docs
-                </a>
-              </Button>
-            </div>
-          </article>
-        ))}
-      </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
         {fleet.map((box) => (
@@ -360,5 +367,60 @@ function TunnelsPage() {
         ) : null}
       </section>
     </div>
+  );
+}
+
+function AgentDetectCard({
+  provider,
+  hit,
+  onUse,
+  selected,
+}: {
+  provider: (typeof TUNNEL_PROVIDERS)[number];
+  hit: AgentHit;
+  scanning: boolean;
+  onUse: () => void;
+  selected: boolean;
+}) {
+  const missing = !hit.installed && !hit.running;
+  const status = hit.running ? "Running" : hit.installed ? "Installed" : "Not found";
+  return (
+    <article className={cn("rounded-xl border bg-background p-4", selected ? "border-primary" : "border-border")}>
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="font-medium">{provider.name}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{provider.blurb}</p>
+        </div>
+        <Badge variant={hit.running ? "ok" : "outline"}>{status}</Badge>
+      </div>
+      <p className="mt-2 text-sm text-muted-foreground">{hit.note}</p>
+      {hit.path ? <p className="mt-1 font-mono text-xs text-muted-foreground break-all">{hit.path}</p> : null}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {missing ? (
+          <Button size="sm" asChild>
+            <a href={provider.download} target="_blank" rel="noreferrer">
+              <Download className="size-4" />
+              Download {provider.name}
+            </a>
+          </Button>
+        ) : (
+          <Button size="sm" onClick={onUse}>
+            {selected ? "Selected" : "Use this agent"}
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" asChild>
+          <a href={provider.url} target="_blank" rel="noreferrer">
+            Docs
+          </a>
+        </Button>
+        {missing ? null : (
+          <Button size="sm" variant="outline" asChild>
+            <a href={provider.download} target="_blank" rel="noreferrer">
+              Re-download
+            </a>
+          </Button>
+        )}
+      </div>
+    </article>
   );
 }
