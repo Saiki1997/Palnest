@@ -1,9 +1,9 @@
-Palnest 3.0.0 — Palworld Server & Mod Manager
+Palnest 3.1.0 — Palworld Server & Mod Manager
 =============================================
 
 Two Windows packages ship with this release:
 
-1) Installer — Palnest-Setup-3.0.0.exe
+1) Installer — Palnest-Setup-3.1.0.exe
    Run the setup wizard. Pages:
      Welcome → License → Shortcuts → Install folder → Copy files → Finish
    You choose:
@@ -12,7 +12,7 @@ Two Windows packages ship with this release:
      • Start menu shortcut (optional)
    Uninstall from Settings → Apps, or Start menu → Palnest → Uninstall Palnest.
 
-2) Portable — Palnest-3.0.0-windows.zip
+2) Portable — Palnest-3.1.0-windows.zip
    No installer. Extract the Palnest folder anywhere and double-click Palnest.exe.
    Keep the whole folder together — Palnest.exe needs the files beside it.
    This build does not write uninstall registry keys or require Administrator.

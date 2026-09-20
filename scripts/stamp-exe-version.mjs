@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-/** Stamp Palnest.exe VERSIONINFO so Windows Properties shows 3.0.0, not Electron/2.2.0. */
+/** Stamp Palnest.exe VERSIONINFO so Windows Properties shows the product version, not Electron/2.2.0. */
 import fs from "node:fs";
 import { NtExecutable, NtExecutableResource, Resource } from "resedit";
 
 const exePath = process.argv[2];
-const version = process.argv[3] || "3.0.0";
+const version = process.argv[3] || "3.1.0";
 if (!exePath || !fs.existsSync(exePath)) {
-  console.error("usage: stamp-exe-version.mjs <Palnest.exe> [3.0.0]");
+  console.error("usage: stamp-exe-version.mjs <Palnest.exe> [3.1.0]");
   process.exit(1);
 }
 

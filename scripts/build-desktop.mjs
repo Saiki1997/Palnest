@@ -19,7 +19,7 @@ const distDir = path.join(root, "dist-desktop");
 const artifacts = path.join(root, "artifacts");
 const hostDir = path.join(root, "desktop-host");
 const vercelOut = path.join(root, ".vercel", "output");
-const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "3.0.0";
+const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "3.1.0";
 
 function run(cmd, args, env = {}, cwd = root) {
   return new Promise((resolve, reject) => {

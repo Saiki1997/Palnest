@@ -1,6 +1,6 @@
 # Palnest — Palworld Server & Mod Manager
 
-**3.0.0** · Windows desktop app for dedicated Palworld servers, mods, worlds, and client frameworks.
+**3.1.0** · Windows desktop app for dedicated Palworld servers, mods, worlds, and client frameworks.
 
 [Download latest release](https://github.com/Saiki1997/Palnest/releases/latest)
 
@@ -29,7 +29,7 @@ You do **not** need Palworld running to open Palnest. Paths can be filled in lat
 
 ## Install
 
-**Setup wizard** — `Palnest-Setup-3.0.0.exe` from [Releases](https://github.com/Saiki1997/Palnest/releases/latest)
+**Setup wizard** — `Palnest-Setup-3.1.0.exe` from [Releases](https://github.com/Saiki1997/Palnest/releases/latest)
 
 1. Welcome → license
 2. Optional desktop and Start menu shortcuts
@@ -38,7 +38,7 @@ You do **not** need Palworld running to open Palnest. Paths can be filled in lat
 
 Uninstall from Settings → Apps, or Start menu → Palnest → Uninstall Palnest.
 
-**Portable zip** — `Palnest-3.0.0-windows.zip`
+**Portable zip** — `Palnest-3.1.0-windows.zip`
 
 Extract the `Palnest` folder and run `Palnest.exe` (or `Launch Palnest.cmd`). Keep the folder together. No registry, no admin.
 

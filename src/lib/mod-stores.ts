@@ -15,9 +15,9 @@ import type {
 const NEXUS_HEADERS = (key: string) => ({
   apikey: key,
   Accept: "application/json",
-  "User-Agent": "Palnest/3.0.0",
+  "User-Agent": "Palnest/3.1.0",
   "Application-Name": "Palnest",
-  "Application-Version": "3.0.0",
+  "Application-Version": "3.1.0",
 });
 
 const CURSE_GAME_ID = 85196;
