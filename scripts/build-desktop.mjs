@@ -109,6 +109,13 @@ function assembleHost() {
   copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(hostDir, "LICENSE.txt"));
 }
 
+function injectHostIntoUnpacked(unpacked) {
+  const dest = path.join(unpacked, "resources", "host");
+  fs.rmSync(dest, { recursive: true, force: true });
+  copyDir(hostDir, dest);
+  console.log("[palnest-desktop] injected latest den into", dest);
+}
+
 function addPortableExtras(folder) {
   copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(folder, "README.txt"));
   copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(folder, "LICENSE.txt"));
@@ -304,6 +311,7 @@ if (skipPackager) {
 const unpacked = findUnpacked();
 if (!unpacked) throw new Error("no Windows unpacked directory — cannot build installer or zip");
 
+injectHostIntoUnpacked(unpacked);
 copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(unpacked, "README.txt"));
 copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(unpacked, "LICENSE.txt"));
 
