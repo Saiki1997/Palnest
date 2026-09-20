@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ModDescription } from "@/components/mod-description";
 import { CATALOG, catalogToHit } from "@/lib/catalog";
 import { filesForHit, kindFolderNote } from "@/lib/mod-kind";
 import { normalizeCategory } from "@/lib/mod-meta";
@@ -95,7 +96,7 @@ function ModFullView() {
   const [note, setNote] = useState("Loading store page and files…");
   const [live, setLive] = useState(false);
   const [busy, setBusy] = useState(true);
-  const [tab, setTab] = useState("files");
+  const [tab, setTab] = useState("description");
 
   useEffect(() => {
     const local = seedFromParam(modId);
@@ -274,7 +275,7 @@ function ModFullView() {
           <TabsTrigger value="files">Files ({files.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="description" className="mt-5">
-          <p className="max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{body}</p>
+          <ModDescription text={body} />
           {hit.requires?.length ? <p className="mt-3 text-sm text-muted-foreground">Requires {hit.requires.join(", ")}.</p> : null}
           {!hit.serverCompatible ? (
             <Badge variant="warn" className="mt-3">
