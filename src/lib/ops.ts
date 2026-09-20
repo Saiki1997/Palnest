@@ -104,7 +104,7 @@ export function defaultOps(): OpsState {
     ue4ssChannel: "stable",
     linuxHost: false,
     upnp: false,
-    tray: true,
+    tray: false,
   };
 }
 

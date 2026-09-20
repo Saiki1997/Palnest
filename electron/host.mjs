@@ -9,7 +9,29 @@ import net from "node:net";
 const pals = new Map();
 const agents = new Map();
 let tray = null;
-let closeToTray = true;
+let closeToTray = false;
+
+export function killProcessTree(child) {
+  if (!child) return;
+  const pid = child.pid;
+  try {
+    child.kill();
+  } catch {
+    /* ignore */
+  }
+  if (process.platform === "win32" && pid) {
+    try {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+        detached: true,
+      });
+      killer.unref();
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 function send(getWindow, channel, payload) {
   const win = getWindow();
@@ -133,11 +155,7 @@ async function udpListen(port) {
 function killTracked(map, id) {
   const child = map.get(id);
   if (!child) return false;
-  try {
-    child.kill();
-  } catch {
-    /* ignore */
-  }
+  killProcessTree(child);
   map.delete(id);
   return true;
 }
@@ -633,7 +651,12 @@ export function registerHost(ipcMain, { getWindow, app, Tray, Menu, nativeImage,
         Menu.buildFromTemplate([
           { label: "Show Palnest", click: () => getWindow()?.show() },
           { type: "separator" },
-          { label: "Quit", click: () => app.quit() },
+          { label: "Quit Palnest", click: () => {
+              app.isQuiting = true;
+              const win = getWindow();
+              if (win && !win.isDestroyed()) win.close();
+              app.quit();
+            } },
         ]),
       );
       tray.on("click", () => getWindow()?.show());

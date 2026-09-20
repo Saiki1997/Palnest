@@ -336,9 +336,9 @@ function SettingsPage() {
             }}
           />
           <Toggle
-            label="Close to tray"
-            hint="Hide Palnest instead of quitting. Balloon when someone joins."
-            checked={ops?.tray !== false}
+            label="Minimize to tray"
+            hint="The taskbar minimize button hides Palnest. The X button always quits and clears Task Manager."
+            checked={Boolean(ops?.tray)}
             onChange={(v) => {
               setOps({ tray: v });
               void hostSetTray(v);

@@ -23,7 +23,7 @@ export function DesktopGet({ compact }: { compact?: boolean }) {
           <div>
             <h2 className="font-medium">Windows app</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              You are in Palnest.exe. Close goes to the tray. palnest:// links open mods and join hosts. PalServer is spawned from this window.
+              You are in Palnest.exe. The X button quits Palnest completely. palnest:// links open mods and join hosts. PalServer is spawned from this window.
             </p>
           </div>
         </div>

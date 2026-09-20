@@ -5,7 +5,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { registerHost, shouldCloseToTray, stopAllHost } from "./host.mjs";
+import { registerHost, shouldCloseToTray, stopAllHost, killProcessTree } from "./host.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.PALNEST_DEV_URL || "http://127.0.0.1:8080";
@@ -18,6 +18,7 @@ app.commandLine.appendSwitch("disable-features", "Translate,MediaRouter,SpareRen
 let mainWindow = null;
 let nitroChild = null;
 let nitroTail = "";
+let shuttingDown = false;
 
 function resourceIcon() {
   const packed = path.join(__dirname, "resources", "icon.png");
@@ -137,6 +138,8 @@ function startNitro(port) {
   nitroChild.stdout?.on("data", noteNitro);
   nitroChild.stderr?.on("data", noteNitro);
   nitroChild.on("exit", (code) => {
+    nitroChild = null;
+    if (shuttingDown) return;
     if (code && mainWindow && !mainWindow.isDestroyed()) {
       dialog.showErrorBox("Palnest", `Palnest stopped (code ${code}).${tailHint()}`);
     }
@@ -144,9 +147,17 @@ function startNitro(port) {
 }
 
 function stopNitro() {
-  if (!nitroChild || nitroChild.killed) return;
-  nitroChild.kill();
+  if (!nitroChild) return;
+  killProcessTree(nitroChild);
   nitroChild = null;
+}
+
+function shutdownPalnest() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  app.isQuiting = true;
+  stopNitro();
+  stopAllHost();
 }
 
 async function resolveAppUrl() {
@@ -182,11 +193,14 @@ function createWindow() {
   });
   Menu.setApplicationMenu(null);
   if (fs.existsSync(splash)) void mainWindow.loadFile(splash);
-  mainWindow.on("close", (e) => {
-    if (process.platform === "win32" && !app.isQuiting && shouldCloseToTray()) {
+  mainWindow.on("minimize", (e) => {
+    if (shouldCloseToTray()) {
       e.preventDefault();
       mainWindow?.hide();
     }
+  });
+  mainWindow.on("close", () => {
+    app.isQuiting = true;
   });
   mainWindow.on("closed", () => {
     mainWindow = null;
@@ -327,14 +341,11 @@ if (!gotLock) {
 }
 
 app.on("window-all-closed", () => {
-  if (process.platform === "win32") return;
-  stopNitro();
-  stopAllHost();
+  shutdownPalnest();
   app.quit();
+  setTimeout(() => app.exit(0), 1500);
 });
 
 app.on("before-quit", () => {
-  app.isQuiting = true;
-  stopNitro();
-  stopAllHost();
+  shutdownPalnest();
 });

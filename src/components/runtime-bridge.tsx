@@ -100,7 +100,7 @@ export function RuntimeBridge() {
     if (!hydrateReady) return;
     void hostAutostart(Boolean(ops?.autostart));
     const api = typeof window !== "undefined" ? window.palnestDesktop : undefined;
-    void api?.setTray?.(ops?.tray !== false);
+    void api?.setTray?.(Boolean(ops?.tray));
   }, [hydrateReady, ops?.autostart, ops?.tray]);
 
   useEffect(() => {

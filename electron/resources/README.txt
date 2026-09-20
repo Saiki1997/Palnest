@@ -23,6 +23,6 @@ First launch
   (Steam / CurseForge / Nexus Mods), clone or delete worlds, edit
   PalWorldSettings.ini, run RCON, and watch the box from this window.
 
-Close goes to the tray. palnest:// links open mods and join hosts.
+Close (X) quits Palnest and leaves Task Manager. palnest:// links open mods and join hosts.
 
 https://github.com/Saiki1997/Palnest
