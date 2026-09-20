@@ -19,7 +19,7 @@ const distDir = path.join(root, "dist-desktop");
 const artifacts = path.join(root, "artifacts");
 const hostDir = path.join(root, "desktop-host");
 const vercelOut = path.join(root, ".vercel", "output");
-const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "2.3.0";
+const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "3.0.0";
 
 function run(cmd, args, env = {}, cwd = root) {
   return new Promise((resolve, reject) => {
@@ -61,6 +61,39 @@ function which(bin) {
     if (fs.existsSync(full)) return full;
   }
   return null;
+}
+
+function writePackagedReadme() {
+  const body = `Palnest ${version} — Palworld Server & Mod Manager
+=============================================
+
+Two Windows packages ship with this release:
+
+1) Installer — Palnest-Setup-${version}.exe
+   Run the setup wizard. Pages:
+     Welcome → License → Shortcuts → Install folder → Copy files → Finish
+   You choose:
+     • Installation directory (Browse)
+     • Desktop shortcut (optional)
+     • Start menu shortcut (optional)
+   Uninstall from Settings → Apps, or Start menu → Palnest → Uninstall Palnest.
+
+2) Portable — Palnest-${version}-windows.zip
+   No installer. Extract the Palnest folder anywhere and double-click Palnest.exe.
+   Keep the whole folder together — Palnest.exe needs the files beside it.
+   This build does not write uninstall registry keys or require Administrator.
+
+First launch
+  Choose Server only, Client only, or Client + server, then Browse to
+  Palworld and/or PalServer. Palnest can start PalServer, install mods
+  (Steam / CurseForge / Nexus Mods), clone or delete worlds, edit
+  PalWorldSettings.ini, run RCON, and watch the box from this window.
+
+Close goes to the tray. palnest:// links open mods and join hosts.
+
+https://github.com/Saiki1997/Palnest
+`;
+  fs.writeFileSync(path.join(root, "electron", "resources", "README.txt"), body);
 }
 
 function assembleHost() {
@@ -247,6 +280,7 @@ function writeManifest(setupName, zipName) {
 fs.mkdirSync(artifacts, { recursive: true });
 fs.mkdirSync(distDir, { recursive: true });
 
+writePackagedReadme();
 console.log("[palnest-desktop] assembling local den…");
 assembleHost();
 
@@ -257,7 +291,7 @@ if (skipPackager) {
 } else {
   console.log("[palnest-desktop] packaging Windows unpacked app…");
   try {
-    await run("npx", ["electron-builder", "--win", "dir", "zip", "--x64", "--config", "electron-builder.yml"], {
+    await run("npx", ["electron-builder", "--win", "dir", "--x64", "--config", "electron-builder.yml"], {
       CSC_IDENTITY_AUTO_DISCOVERY: "false",
       ELECTRON_BUILDER_BINARIES_MIRROR: process.env.ELECTRON_BUILDER_BINARIES_MIRROR || "",
     });
@@ -276,15 +310,10 @@ copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(
 const setup = await buildInstallerWizard(unpacked);
 
 let zip = path.join(distDir, `Palnest-${version}-windows.zip`);
-const existingZip = latestFile(distDir, (f) => f.endsWith(".zip") && /win/i.test(f) && !f.startsWith("_raw"));
-if (existingZip && path.resolve(existingZip) !== path.resolve(zip)) {
-  await flattenPortableZip(existingZip, zip);
-} else {
-  const tmpZip = path.join(distDir, `_raw-${version}.zip`);
-  await zipWithPython(unpacked, tmpZip, "Palnest");
-  await flattenPortableZip(tmpZip, zip);
-  fs.rmSync(tmpZip, { force: true });
-}
+const tmpZip = path.join(distDir, `_raw-${version}.zip`);
+await zipWithPython(unpacked, tmpZip, "Palnest");
+await flattenPortableZip(tmpZip, zip);
+fs.rmSync(tmpZip, { force: true });
 
 const setupDest = path.join(distDir, `Palnest-Setup-${version}.exe`);
 if (path.resolve(setup) !== path.resolve(setupDest)) copyIfExists(setup, setupDest);

@@ -28,6 +28,7 @@ extraFiles:
     to: LICENSE.txt
 win:
   icon: electron/resources/icon.png
+  legalTrademarks: Palnest
   signAndEditExecutable: false
   requestedExecutionLevel: asInvoker
   target:
