@@ -307,6 +307,13 @@ if (!unpacked) throw new Error("no Windows unpacked directory — cannot build i
 copyIfExists(path.join(root, "electron", "resources", "README.txt"), path.join(unpacked, "README.txt"));
 copyIfExists(path.join(root, "electron", "resources", "LICENSE.txt"), path.join(unpacked, "LICENSE.txt"));
 
+const palnestExe = ["Palnest.exe", "electron.exe"]
+  .map((n) => path.join(unpacked, n))
+  .find((p) => fs.existsSync(p));
+if (palnestExe) {
+  await run("node", [path.join(root, "scripts", "stamp-exe-version.mjs"), palnestExe, version]);
+}
+
 const setup = await buildInstallerWizard(unpacked);
 
 let zip = path.join(distDir, `Palnest-${version}-windows.zip`);
