@@ -1,5 +1,4 @@
 import { cmpGameVersion } from "./catalog.ts";
-import { slugHost } from "./tunnels.ts";
 import type { ServerState } from "./types.ts";
 
 /** Older PalServer (EA / early 1.0) binds UDP only after the world loads. Newer 1.0.4+ is faster. */

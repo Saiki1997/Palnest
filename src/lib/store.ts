@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import type {
   AppMode,
   InstallTarget,
@@ -33,11 +33,13 @@ import {
   emptyMonitor,
   sampleAt,
   seedHistory,
+  stoppedSample,
   settingOn,
   type MonitorThresholds,
 } from "./monitor";
 import { fleetOf, isStalePortClaim, migrateFleet, nextSlot, normalizeInstance, patchInstance, portConflicts, portsForSlot, suggestedInstallPath, worldBusy } from "./fleet";
-import { advanceTunnel, type TunnelAction } from "./tunnels";
+import { advanceTunnel, joinIp, type TunnelAction } from "./tunnels";
+import { isDesktopApp } from "./desktop";
 import {
   applyProfile,
   bootConsole,
@@ -46,7 +48,6 @@ import {
   snapshotProfile,
   tickConsoleLine,
   type BanEntry,
-  type ModProfile,
   type OpsState,
 } from "./ops";
 import { mergeFx, pushHistory, type ClientFx, type EngineBlock } from "./fx";
@@ -633,13 +634,17 @@ export const useAppStore = create<Store>()(
           const restOn = settingOn(st.worldSettings, "RESTAPIEnabled");
           const startedAt = new Date().toISOString();
           const players = inst.players.filter((p) => p.online).length;
-          const sample = sampleAt(Date.now(), {
-            running: true,
-            players: already ? already + 1 : players,
-            worldMb: world?.sizeMb ?? 200,
-            restOn,
-            restart: true,
-          });
+          // Desktop history comes from measured samples (RuntimeBridge); only the preview simulates.
+          const demo = !isDesktopApp();
+          const sample = demo
+            ? sampleAt(Date.now(), {
+                running: true,
+                players: already ? already + 1 : players,
+                worldMb: world?.sizeMb ?? 200,
+                restOn,
+                restart: true,
+              })
+            : null;
           const next = patchInstance(st, inst.id, {
             running: true,
             startedAt,
@@ -651,7 +656,7 @@ export const useAppStore = create<Store>()(
             inst.tunnel.status === "online" && inst.tunnel.game
               ? ` Tunnel ${inst.tunnel.game.ip}:${inst.tunnel.game.port}.`
               : "";
-          const boot = bootConsole({ name: inst.name, version: inst.version, port: inst.port, build: inst.build }).map((text) => ({
+          const boot = (demo ? bootConsole({ name: inst.name, version: inst.version, port: inst.port, build: inst.build }) : []).map((text) => ({
             id: nid("con"),
             ts: startedAt,
             stream: "out" as const,
@@ -663,7 +668,7 @@ export const useAppStore = create<Store>()(
             consoleLines: { ...(st.consoleLines ?? {}), [inst.id]: [...(st.consoleLines?.[inst.id] ?? []), ...boot].slice(-120) },
             monitor: {
               ...st.monitor,
-              samples: appendSample(st.monitor.samples, sample),
+              samples: sample ? appendSample(st.monitor.samples, sample) : st.monitor.samples,
               session: {
                 ...st.monitor.session,
                 peakPlayers: Math.max(st.monitor.session.peakPlayers, players),
@@ -690,23 +695,27 @@ export const useAppStore = create<Store>()(
           const world = s.worlds.find((w) => w.id === inst.worldId) ?? s.worlds.find((w) => w.active);
           const restOn = settingOn(s.worldSettings, "RESTAPIEnabled");
           const remaining = fleet.filter((i) => i.running && i.id !== inst.id).length;
-          const sample = sampleAt(Date.now(), {
-            running: remaining > 0,
-            players: remaining,
-            worldMb: world?.sizeMb ?? 0,
-            restOn,
-          });
+          const sample = isDesktopApp()
+            ? remaining > 0
+              ? null
+              : stoppedSample(Date.now(), s.monitor.samples[s.monitor.samples.length - 1])
+            : sampleAt(Date.now(), {
+                running: remaining > 0,
+                players: remaining,
+                worldMb: world?.sizeMb ?? 0,
+                restOn,
+              });
           const next = patchInstance(s, inst.id, { running: false, startedAt: null, players: [], pid: null, listenAt: null, queryBound: false });
           return {
             ...next,
             monitor: {
               ...s.monitor,
-              samples: appendSample(s.monitor.samples, sample),
+              samples: sample ? appendSample(s.monitor.samples, sample) : s.monitor.samples,
             },
             logs: pushLog(s.logs, {
               level: "info",
               source: "server",
-              message: `${inst.name} stopped. World saved.`,
+              message: `${inst.name} stopped.`,
             }),
           };
         }),
@@ -1136,6 +1145,7 @@ export const useAppStore = create<Store>()(
             port: cur.port,
             queryPort: cur.queryPort,
             provider: chosen,
+            real: isDesktopApp(),
           });
           if (tunnel.status === "error" && tunnel.lastError) error = tunnel.lastError;
           const publicIp = tunnel.status === "online" && tunnel.game ? tunnel.game.ip : cur.publicIp;
@@ -1144,15 +1154,19 @@ export const useAppStore = create<Store>()(
             action === "install"
               ? `Installed the ${chosen === "playit" ? "playit.gg" : "PortWarp"} agent on ${cur.name}.`
               : action === "claim"
-                ? `Claim the playit agent: ${tunnel.claimUrl}`
+                ? tunnel.claimUrl
+                  ? `Claim the playit agent: ${tunnel.claimUrl}`
+                  : `Start ${cur.name} with the tunnel on. The playit agent prints its claim link in the console.`
                 : action === "confirm"
                   ? `playit agent claimed for ${cur.name}.`
                   : action === "create"
-                    ? `Created ${chosen === "playit" ? "Palworld" : "UDP"} tunnel for ${cur.name}${tunnel.game ? ` → ${tunnel.game.ip}:${tunnel.game.port}` : ""}.`
+                    ? `Created ${chosen === "playit" ? "Palworld" : "UDP"} tunnel for ${cur.name}${tunnel.game ? ` → ${joinIp({ ...cur, tunnel })}` : ""}.`
                     : action === "start"
                       ? tunnel.game
-                        ? `${cur.name} tunnel online · ${tunnel.game.ip}:${tunnel.game.port}`
-                        : `${cur.name} tunnel failed to start.`
+                        ? `${cur.name} tunnel online · ${joinIp({ ...cur, tunnel })}`
+                        : tunnel.status === "online"
+                          ? `${cur.name} tunnel agent starts once PalServer is listening. Its public address shows up here when the agent reports it.`
+                          : `${cur.name} tunnel failed to start.`
                       : action === "stop"
                         ? `${cur.name} tunnel stopped.`
                         : `${cur.name} tunnel cleared.`;
@@ -1208,12 +1222,6 @@ export const useAppStore = create<Store>()(
             id = inst.id;
             if (asNew) instances = [...fleet.instances, inst];
             else instances = fleet.instances.map((i) => (i.id === inst.id ? inst : i));
-            server = inst;
-          } else if (asNew) {
-            const slot = nextSlot(fleet.instances);
-            const inst = makeFrom(fleet.server, slot);
-            id = inst.id;
-            instances = [...fleet.instances, inst];
             server = inst;
           } else {
             const inst = makeFrom(fleet.server, fleet.server.slot);
@@ -1834,6 +1842,9 @@ export const useAppStore = create<Store>()(
         }),
       tickMonitor: () =>
         set((s) => {
+          // The desktop app records measured samples in RuntimeBridge and shows
+          // only real console output; this synthetic tick is the preview's demo.
+          if (isDesktopApp()) return s;
           const fleet = fleetOf(s);
           const world = s.worlds.find((w) => w.active);
           const running = fleet.filter((i) => i.running);
@@ -2103,32 +2114,45 @@ export const useAppStore = create<Store>()(
     }),
     {
       name: "palnest-v14",
-      storage: createJSONStorage(() => {
+      // Debounced, and serialized only when written: PalServer output can call
+      // set() many times a second, and stringifying the whole state each time
+      // was the main idle cost while a server was running.
+      storage: (() => {
+        type Persisted = StorageValue<unknown>;
         let timer: ReturnType<typeof setTimeout> | undefined;
-        let pending: { name: string; value: string } | null = null;
+        let pending: { name: string; value: Persisted } | null = null;
         const flush = () => {
+          if (timer) clearTimeout(timer);
+          timer = undefined;
           if (!pending) return;
-          localStorage.setItem(pending.name, pending.value);
+          localStorage.setItem(pending.name, JSON.stringify(pending.value));
           pending = null;
         };
+        // Closing the window quits Palnest, so write any debounced change first.
+        if (typeof window !== "undefined") window.addEventListener("pagehide", flush);
+        const legacy = ["palnest-v13", "palnest-v12", "palnest-v11", "palnest-v10"];
         return {
-          getItem: (name) =>
-            localStorage.getItem(name) ?? localStorage.getItem("palnest-v13") ?? localStorage.getItem("palnest-v12") ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
-          setItem: (name, value) => {
+          getItem: (name: string): Persisted | null => {
+            const raw = [name, ...legacy].map((key) => localStorage.getItem(key)).find((v) => v != null);
+            if (!raw) return null;
+            try {
+              return JSON.parse(raw) as Persisted;
+            } catch {
+              return null;
+            }
+          },
+          setItem: (name: string, value: Persisted) => {
             pending = { name, value };
             if (timer) clearTimeout(timer);
-            timer = setTimeout(flush, 280);
+            timer = setTimeout(flush, 500);
           },
-          removeItem: (name) => {
+          removeItem: (name: string) => {
             if (timer) clearTimeout(timer);
             pending = null;
-            localStorage.removeItem(name);
-            localStorage.removeItem("palnest-v13");
-            localStorage.removeItem("palnest-v11");
-            localStorage.removeItem("palnest-v10");
+            for (const key of [name, ...legacy]) localStorage.removeItem(key);
           },
-        };
-      }),
+        } as PersistStorage<any>;
+      })(),
       skipHydration: true,
       onRehydrateStorage: () => (state) => {
         if (!state) {
@@ -2150,9 +2174,12 @@ export const useAppStore = create<Store>()(
           guideDismissed: Boolean(state.guideDismissed),
           checkerRan: Boolean(state.checkerRan),
           monitor: {
-            samples: state.monitor?.samples?.length
-              ? state.monitor.samples
-              : seedHistory({
+            // Older builds stored simulated history; on desktop keep measured samples only.
+            samples: isDesktopApp()
+              ? (state.monitor?.samples ?? []).filter((sample) => sample.hostRamGb != null)
+              : state.monitor?.samples?.length
+                ? state.monitor.samples
+                : seedHistory({
                   running: Boolean(state.server?.running),
                   startedAt: state.server?.startedAt ?? null,
                   players: state.server?.players?.filter((p) => p.online).length ?? 0,

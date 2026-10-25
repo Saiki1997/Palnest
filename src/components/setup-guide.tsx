@@ -61,7 +61,7 @@ export function DenChecklist({
 
   if (compact) {
     return (
-      <section className="dash-glass mb-4 flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
+      <section className="panel mb-5 flex flex-col gap-3 border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-medium">Desktop client setup</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -84,7 +84,7 @@ export function DenChecklist({
   }
 
   return (
-    <section className="mb-6 rounded-xl border border-border bg-card p-5">
+    <section className="panel mb-6 p-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="font-medium tracking-tight">Desktop client setup</h2>

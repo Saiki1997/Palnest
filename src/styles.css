@@ -1,43 +1,103 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * Palnest design tokens. Dark is the default; light follows the system unless
+ * the user picks a theme in Settings (html[data-theme]). Utilities read the
+ * variables at runtime, so overriding them below re-themes every page.
+ */
 @theme {
-  --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
 
-  --color-background: #071018;
-  --color-foreground: #e8f2f4;
-  --color-card: #10202a;
-  --color-card-foreground: #e8f2f4;
-  --color-surface: #0b1822;
-  --color-muted: #15232e;
-  --color-muted-foreground: #8aa3ad;
-  --color-primary: #4ec9c4;
-  --color-primary-foreground: #071018;
-  --color-border: rgb(232 242 244 / 0.12);
-  --color-ring: #4ec9c4;
-  --color-danger: #e06b78;
-  --color-danger-foreground: #fff5f6;
-  --color-ok: #3dce8a;
-  --color-warn: #e0a35a;
-  --color-overlay: rgb(5 10 16 / 0.72);
-  --color-chart-cpu: #4fd6e0;
-  --color-chart-ram: #e0a35a;
+  --color-background: #0b0d10;
+  --color-foreground: #e6e9ed;
+  --color-surface: #0f1215;
+  --color-card: #14171b;
+  --color-card-foreground: #e6e9ed;
+  --color-muted: #1b1f24;
+  --color-muted-foreground: #8b949e;
+  --color-primary: #6ea8fe;
+  --color-primary-foreground: #0b0d10;
+  --color-border: rgb(230 233 237 / 0.09);
+  --color-ring: #6ea8fe;
+  --color-danger: #f0716b;
+  --color-danger-foreground: #160404;
+  --color-ok: #4cc38a;
+  --color-warn: #e6a94e;
+  --color-overlay: rgb(4 6 8 / 0.7);
+  --color-chart-cpu: #6ea8fe;
+  --color-chart-ram: #c493f5;
   --color-discord: #5865f2;
   --color-discord-foreground: #f4f5ff;
 
   --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius: 12px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius: 8px;
 
-  --shadow-border: 0 0 0 1px rgb(232 242 244 / 0.08);
-  --shadow-border-hover: 0 0 0 1px rgb(232 242 244 / 0.14);
+  --shadow-border: 0 0 0 1px var(--color-border);
+  --shadow-border-hover: 0 0 0 1px rgb(230 233 237 / 0.16);
+  --shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.55), 0 0 0 1px var(--color-border);
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --color-background: #f5f6f8;
+    --color-foreground: #12161b;
+    --color-surface: #eceef2;
+    --color-card: #ffffff;
+    --color-card-foreground: #12161b;
+    --color-muted: #eef0f3;
+    --color-muted-foreground: #5c6670;
+    --color-primary: #2563eb;
+    --color-primary-foreground: #ffffff;
+    --color-border: rgb(18 22 27 / 0.1);
+    --color-ring: #2563eb;
+    --color-danger: #d93a32;
+    --color-danger-foreground: #ffffff;
+    --color-ok: #198754;
+    --color-warn: #b7721a;
+    --color-overlay: rgb(18 22 27 / 0.4);
+    --color-chart-cpu: #2563eb;
+    --color-chart-ram: #9333ea;
+    --shadow-border-hover: 0 0 0 1px rgb(18 22 27 / 0.2);
+    --shadow-pop: 0 12px 32px -12px rgb(18 22 27 / 0.25), 0 0 0 1px var(--color-border);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme]) {
+      color-scheme: light;
+      --color-background: #f5f6f8;
+      --color-foreground: #12161b;
+      --color-surface: #eceef2;
+      --color-card: #ffffff;
+      --color-card-foreground: #12161b;
+      --color-muted: #eef0f3;
+      --color-muted-foreground: #5c6670;
+      --color-primary: #2563eb;
+      --color-primary-foreground: #ffffff;
+      --color-border: rgb(18 22 27 / 0.1);
+      --color-ring: #2563eb;
+      --color-danger: #d93a32;
+      --color-danger-foreground: #ffffff;
+      --color-ok: #198754;
+      --color-warn: #b7721a;
+      --color-overlay: rgb(18 22 27 / 0.4);
+      --color-chart-cpu: #2563eb;
+      --color-chart-ram: #9333ea;
+      --shadow-border-hover: 0 0 0 1px rgb(18 22 27 / 0.2);
+      --shadow-pop: 0 12px 32px -12px rgb(18 22 27 / 0.25), 0 0 0 1px var(--color-border);
+    }
+  }
+
   * {
     border-color: var(--color-border);
   }
@@ -54,6 +114,7 @@
     background: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
+    font-size: 14px;
     line-height: 1.5;
   }
 
@@ -66,8 +127,8 @@
   h2,
   h3 {
     text-wrap: balance;
-    letter-spacing: -0.03em;
-    line-height: 1.15;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
   }
 
   p {
@@ -85,8 +146,29 @@
     font: inherit;
   }
 
+  /* Native selects and checkboxes left on older pages follow the theme too. */
+  select {
+    font-size: 13px;
+    border-radius: var(--radius-md);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--color-primary);
+  }
+
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 35%, transparent);
+  }
+
+  /* Thin, theme-aware scrollbars for the desktop window. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--color-muted-foreground) 35%, transparent) transparent;
   }
 }
 
@@ -104,51 +186,32 @@
   font-family: var(--font-mono);
 }
 
-.glass-panel {
-  background: color-mix(in oklab, var(--color-card) 78%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-border);
+/* Section label used above lists and stat groups. */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
 }
 
-.dash-glass {
-  background: color-mix(in oklab, var(--color-card) 82%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-border);
-  transition: box-shadow 120ms ease-out;
+/* The one card surface every page shares. */
+.panel {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  color: var(--color-card-foreground);
 }
 
-.dash-glass:hover {
-  box-shadow: var(--shadow-border-hover);
+.panel-hover {
+  transition: border-color 120ms ease-out;
 }
 
-.node-active,
-.dash-glass.node-active:hover {
-  box-shadow: 0 0 0 1px var(--color-primary);
+.panel-hover:hover {
+  border-color: color-mix(in oklab, var(--color-foreground) 18%, transparent);
 }
 
-.hub-rail {
-  box-shadow: inset 3px 0 0 var(--color-primary);
-}
-
-.chart-orb-cpu {
-  box-shadow: 0 0 14px var(--color-chart-cpu);
-}
-
-.chart-orb-ram {
-  box-shadow: 0 0 14px var(--color-chart-ram);
-}
-
-.node-active {
-  box-shadow: 0 0 0 1px var(--color-primary);
-}
-
-.dash-hero {
-  background-color: var(--color-background);
-  background-image:
-    linear-gradient(180deg, rgb(7 16 24 / 0.28) 0%, rgb(7 16 24 / 0.48) 48%, rgb(7 16 24 / 0.88) 100%),
-    linear-gradient(90deg, rgb(7 16 24 / 0.78) 0%, rgb(7 16 24 / 0.22) 46%, rgb(7 16 24 / 0.04) 100%),
-    url("/dash-hero.jpg");
-  background-size: cover;
-  background-position: center 28%;
-  background-repeat: no-repeat;
+.panel-selected {
+  border-color: color-mix(in oklab, var(--color-primary) 60%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-primary) 40%, transparent);
 }

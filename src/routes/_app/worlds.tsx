@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FileDrop } from "@/components/file-drop";
 import { ImportServerDialog } from "@/components/import-server-dialog";
@@ -10,9 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { downloadBytes, downloadText, readFileBytes, readFileText, saveBytes, saveText } from "@/lib/download";
 import { editedCount, isEdited, parseOptionSettings } from "@/lib/ini";
 import {
@@ -65,7 +63,7 @@ function WorldsPage() {
           </Button>
         }
       />
-      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-5 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {(
           [
             ["list", "Worlds"],
@@ -79,8 +77,8 @@ function WorldsPage() {
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "h-9 rounded-sm px-3 text-sm font-medium",
-              tab === id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-[13px] font-medium",
+              tab === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {label}
@@ -195,7 +193,6 @@ function WorldFileBar() {
 
 function WorldList() {
   const worlds = useAppStore((s) => s.worlds);
-  const backups = useAppStore((s) => s.backups);
   const worldSaves = useAppStore((s) => s.worldSaves);
   const instances = useAppStore((s) => s.instances);
   const server = useAppStore((s) => s.server);
@@ -204,8 +201,6 @@ function WorldList() {
   const deleteWorld = useAppStore((s) => s.deleteWorld);
   const createWorld = useAppStore((s) => s.createWorld);
   const createBackup = useAppStore((s) => s.createBackup);
-  const restoreBackup = useAppStore((s) => s.restoreBackup);
-  const autoBackup = useAppStore((s) => s.autoBackup);
   const patchWorld = useAppStore((s) => s.patchWorld);
   const applyProfileById = useAppStore((s) => s.applyProfileById);
   const profiles = useAppStore((s) => s.profiles);
@@ -273,7 +268,7 @@ function WorldList() {
         </Button>
         <Button onClick={() => setNewOpen(true)}>New world</Button>
       </div>
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="overflow-hidden panel">
         {worlds.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-muted-foreground">No worlds yet. Import a server or start a new dedicated install.</p>
         ) : (
@@ -380,7 +375,7 @@ function BackupList() {
   const server = useAppStore((s) => s.server);
   const paths = useAppStore((s) => s.paths);
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="panel p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-medium">Backups</h2>
@@ -579,7 +574,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <h2 className="font-medium">World.sav / WorldOption.sav</h2>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           Dedicated stores the map in Level.sav. World settings that stick live in WorldOption.sav next to it — that is
@@ -626,7 +621,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         ) : null}
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <h2 className="font-medium">Write PalWorldSettings.ini + World.sav</h2>
         <p className="mt-1 mb-3 max-w-2xl text-sm text-muted-foreground">
           Pack includes PalWorldSettings.ini, WorldOption.sav (world settings), and LevelMeta.sav (name and day). Put the
@@ -635,7 +630,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         <WorldFileBar />
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-medium">WorldOption overlay</h2>
@@ -663,7 +658,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <h2 className="font-medium">LevelMeta.sav</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           World name and in-game day written into LevelMeta.sav. Host name and level come from the first player in the
@@ -695,7 +690,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="font-medium">WorldOption settings</h2>
@@ -722,7 +717,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         )}
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <h2 className="font-medium">Players in {active.name}</h2>
@@ -780,7 +775,7 @@ function SavEditor({ onOpenIni }: { onOpenIni: () => void }) {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="mb-4 flex items-end justify-between gap-3">
           <div>
             <h2 className="font-medium">Guilds</h2>

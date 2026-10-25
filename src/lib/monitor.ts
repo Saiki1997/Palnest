@@ -1,10 +1,11 @@
 import { formatUptime, timeAgo } from "./utils.ts";
 import type { BackupInfo, WorldInfo, WorldSaveData } from "./types.ts";
 
+/** Demo-only fallback; the desktop app records the real total on each sample. */
 export const HOST_RAM_GB = 16;
 
-export function ramFromPct(pct: number) {
-  return Number(((pct / 100) * HOST_RAM_GB).toFixed(1));
+export function ramFromPct(pct: number, totalGb = HOST_RAM_GB) {
+  return Number(((pct / 100) * totalGb).toFixed(1));
 }
 
 export type HistoryRange = "15m" | "1h" | "6h";
@@ -23,6 +24,8 @@ export interface MetricSample {
   worldMb: number;
   diskUsedPct: number;
   diskFreeGb: number;
+  /** Installed RAM, set on real desktop samples. */
+  hostRamGb?: number;
   restart?: boolean;
 }
 
@@ -169,18 +172,69 @@ export function sampleAt(
   };
 }
 
-export function overlayHost(
-  sample: MetricSample,
-  host: { cpu: number; ramMb: number },
-  rest?: { fps: number | null; frameMs: number | null; players?: number },
+const round = (n: number, digits = 1) => Number(n.toFixed(digits));
+
+/**
+ * One sample from measured values only (desktop app). Anything the host could
+ * not measure is 0 or null rather than guessed, and carries over the last
+ * known disk reading so charts do not drop to zero between polls.
+ */
+export function liveSample(
+  t: number,
+  input: {
+    host: {
+      cpu: number;
+      ramMb: number;
+      running: boolean;
+      threads?: number;
+      hostCpu?: number | null;
+      hostRamPct?: number;
+      hostRamGb?: number;
+      diskFreeGb?: number | null;
+      diskUsedPct?: number | null;
+    };
+    rest?: { fps: number | null; frameMs: number | null; players?: number } | null;
+    players: number;
+    worldMb: number;
+    previous?: MetricSample;
+  },
 ): MetricSample {
+  const { host, rest, previous } = input;
   return {
-    ...sample,
-    procCpu: host.cpu || sample.procCpu,
-    procRamGb: host.ramMb ? Number((host.ramMb / 1024).toFixed(2)) : sample.procRamGb,
-    fps: rest?.fps ?? sample.fps,
-    frameMs: rest?.frameMs ?? sample.frameMs,
-    players: rest?.players ?? sample.players,
+    t,
+    running: host.running,
+    hostCpu: round(host.hostCpu ?? previous?.hostCpu ?? 0),
+    hostRamPct: round(host.hostRamPct ?? previous?.hostRamPct ?? 0),
+    hostRamGb: host.hostRamGb ?? previous?.hostRamGb,
+    procCpu: round(host.cpu),
+    procRamGb: round(host.ramMb / 1024, 2),
+    threads: host.threads ?? 0,
+    fps: rest?.fps ?? null,
+    frameMs: rest?.frameMs ?? null,
+    players: rest?.players ?? input.players,
+    worldMb: input.worldMb,
+    diskUsedPct: round(host.diskUsedPct ?? previous?.diskUsedPct ?? 0),
+    diskFreeGb: round(host.diskFreeGb ?? previous?.diskFreeGb ?? 0),
+  };
+}
+
+/** Marks a stop in the history without inventing host readings. */
+export function stoppedSample(t: number, previous?: MetricSample): MetricSample {
+  return {
+    t,
+    running: false,
+    hostCpu: previous?.hostCpu ?? 0,
+    hostRamPct: previous?.hostRamPct ?? 0,
+    hostRamGb: previous?.hostRamGb,
+    procCpu: 0,
+    procRamGb: 0,
+    threads: 0,
+    fps: null,
+    frameMs: null,
+    players: 0,
+    worldMb: previous?.worldMb ?? 0,
+    diskUsedPct: previous?.diskUsedPct ?? 0,
+    diskFreeGb: previous?.diskFreeGb ?? 0,
   };
 }
 

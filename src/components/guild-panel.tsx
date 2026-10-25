@@ -19,8 +19,8 @@ export function GuildPanel() {
 
   const world = worlds.find((w) => w.id === server.worldId) ?? worlds.find((w) => w.active);
   const save = world ? worldSaves[world.id] : undefined;
-  const players = save?.players ?? [];
-  const guilds = save?.guilds ?? [];
+  const players = useMemo(() => save?.players ?? [], [save]);
+  const guilds = useMemo(() => save?.guilds ?? [], [save]);
 
   const membersOf = useMemo(() => {
     const map = new Map<string, typeof players>();
@@ -68,7 +68,7 @@ export function GuildPanel() {
             const members = membersOf.get(g.id) ?? [];
             const outsiders = players.filter((p) => p.guild !== g.name);
             return (
-              <article key={g.id} className="rounded-xl border border-border bg-card p-4">
+              <article key={g.id} className="panel p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-medium">{g.name}</h2>

@@ -234,11 +234,15 @@ Every editor that can change files (INI, Engine.ini, MOTD, frameworks, ops, guil
 
 ---
 
-## Tests (from source)
+## Develop (from source)
 
 ```
+npm ci
+npm run dev            # http://127.0.0.1:8080
 npm run typecheck
-node --test src/lib/ops.test.ts src/lib/fleet.test.ts
+npm run lint
+npm test
+npm run build && npm run desktop:pack
 ```
 
 ---

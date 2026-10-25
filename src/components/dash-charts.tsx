@@ -1,160 +1,164 @@
 import { useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { MetricSample } from "@/lib/monitor";
 import { downsample, filterRange, HOST_RAM_GB, ramFromPct } from "@/lib/monitor";
-import { cn } from "@/lib/utils";
 
 function formatTick(t: number) {
   return new Date(t).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
-export function CpuLoadChart({
-  samples,
-  live,
+type Point = { at: number; value: number };
+
+/** One-hour host load chart. Both charts share it so they read as a pair. */
+function LoadChart({
+  title,
+  points,
+  current,
+  unit,
+  max,
+  color,
+  stats,
 }: {
-  samples: MetricSample[];
-  live?: boolean;
+  title: string;
+  points: Point[];
+  current: string;
+  unit: string;
+  max: number;
+  color: string;
+  stats: { label: string; value: string }[];
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const slice = filterRange(samples, "1h");
-  const t0 = slice[0]?.t ?? 0;
-  const data = useMemo(
-    () =>
-      downsample(slice).map((s) => ({
-        x: s.t - t0,
-        at: s.t,
-        cpu: Number(s.hostCpu.toFixed(1)),
-      })),
-    [slice, t0],
-  );
-  const cpus = data.map((d) => d.cpu);
-  const min = cpus.length ? Math.min(...cpus) : 0;
-  const max = cpus.length ? Math.max(...cpus) : 0;
-  const avg = cpus.length ? cpus.reduce((a, b) => a + b, 0) / cpus.length : 0;
-  const latest = samples[samples.length - 1]?.hostCpu ?? 0;
-  const last = data[data.length - 1];
+  const gradientId = `fill-${title.replace(/\W/g, "")}`;
 
   return (
-    <section className="dash-glass rounded-xl p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <section className="panel flex flex-col p-4">
+      <div className="flex items-baseline justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-chart-cpu" />
-          <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">System CPU load</p>
+          <span className="size-2 rounded-full" style={{ background: color }} />
+          <h2 className="text-[13px] font-medium">{title}</h2>
+          <span className="text-xs text-muted-foreground">last hour</span>
         </div>
-        <p className="font-mono text-lg font-medium tabular-nums text-chart-cpu">{latest.toFixed(0)} %</p>
+        <p className="font-mono text-base font-medium tabular-nums">
+          {current}
+          <span className="ml-0.5 text-xs text-muted-foreground">{unit}</span>
+        </p>
       </div>
-      <div className="h-36 w-full min-w-0">
-        {mounted && data.length > 1 ? (
+      <div className="mt-3 h-32 w-full min-w-0">
+        {mounted && points.length > 1 ? (
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-            <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <XAxis dataKey="x" type="number" domain={["dataMin", "dataMax"]} hide />
-              <YAxis domain={[0, 100]} hide />
+            <AreaChart data={points} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={color} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={color} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="at" type="number" domain={["dataMin", "dataMax"]} hide />
+              <YAxis domain={[0, max]} hide />
               <Tooltip
+                cursor={{ stroke: "var(--color-border)" }}
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
-                  const row = payload[0]?.payload as { at?: number; cpu?: number };
+                  const row = payload[0]?.payload as Point;
                   return (
-                    <div className="rounded-md bg-card px-3 py-2 text-xs shadow-[var(--shadow-border)]">
-                      <p className="text-muted-foreground">{row.at ? formatTick(row.at) : ""}</p>
-                      <p className="mt-1 font-mono tabular-nums text-chart-cpu">{row.cpu?.toFixed(0)}%</p>
+                    <div className="rounded-md bg-card px-2.5 py-1.5 text-xs shadow-[var(--shadow-pop)]">
+                      <p className="text-muted-foreground">{formatTick(row.at)}</p>
+                      <p className="mt-0.5 font-mono tabular-nums">
+                        {row.value.toFixed(1)} {unit}
+                      </p>
                     </div>
                   );
                 }}
               />
               <Area
                 type="monotone"
-                dataKey="cpu"
-                stroke="var(--color-chart-cpu)"
-                fill="var(--color-chart-cpu)"
-                fillOpacity={0.28}
-                strokeWidth={2.25}
+                dataKey="value"
+                stroke={color}
+                fill={`url(#${gradientId})`}
+                strokeWidth={1.75}
                 isAnimationActive={false}
                 dot={false}
-                activeDot={{ r: 4, fill: "var(--color-chart-cpu)", stroke: "none" }}
+                activeDot={{ r: 3, fill: color, stroke: "none" }}
               />
-              {last ? (
-                <ReferenceDot
-                  x={last.x}
-                  y={last.cpu}
-                  r={5}
-                  fill="var(--color-chart-cpu)"
-                  stroke="var(--color-background)"
-                  strokeWidth={2}
-                />
-              ) : null}
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Waiting for host samples.</div>
+          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+            Samples appear here while a server runs.
+          </div>
         )}
       </div>
-      <dl className="mt-3 grid grid-cols-3 gap-3 text-xs text-muted-foreground">
-        <div>
-          <dt className="uppercase tracking-widest">Min</dt>
-          <dd className="font-mono tabular-nums text-foreground">{min.toFixed(1)}</dd>
-        </div>
-        <div className="text-center">
-          <dt className="uppercase tracking-widest">Avg</dt>
-          <dd className="font-mono tabular-nums text-foreground">{avg.toFixed(1)}</dd>
-        </div>
-        <div className="text-right">
-          <dt className="uppercase tracking-widest">Max</dt>
-          <dd className="font-mono tabular-nums text-foreground">{max.toFixed(1)}</dd>
-        </div>
+      <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-border pt-3 text-xs">
+        {stats.map((s, i) => (
+          <div key={s.label} className={i === 1 ? "text-center" : i === 2 ? "text-right" : undefined}>
+            <dt className="text-muted-foreground">{s.label}</dt>
+            <dd className="font-mono tabular-nums">{s.value}</dd>
+          </div>
+        ))}
       </dl>
-      {live ? <p className="sr-only">Live CPU</p> : null}
     </section>
   );
 }
 
-export function RamLoadBar({ samples }: { samples: MetricSample[] }) {
-  const slice = filterRange(samples, "1h");
-  const latest = samples[samples.length - 1];
-  const pct = latest?.hostRamPct ?? 0;
-  const gb = ramFromPct(pct);
-  const ramVals = slice.map((s) => ramFromPct(s.hostRamPct));
-  const min = ramVals.length ? Math.min(...ramVals) : 0;
-  const avg = ramVals.length ? ramVals.reduce((a, b) => a + b, 0) / ramVals.length : 0;
-  const width = Math.min(100, Math.max(3, pct));
+function summary(values: number[]) {
+  if (!values.length) return { min: 0, avg: 0, max: 0 };
+  return {
+    min: Math.min(...values),
+    avg: values.reduce((a, b) => a + b, 0) / values.length,
+    max: Math.max(...values),
+  };
+}
 
+export function CpuLoadChart({ samples }: { samples: MetricSample[] }) {
+  const points = useMemo(
+    () => downsample(filterRange(samples, "1h")).map((s) => ({ at: s.t, value: s.hostCpu })),
+    [samples],
+  );
+  const s = summary(points.map((p) => p.value));
+  const latest = samples[samples.length - 1]?.hostCpu ?? 0;
   return (
-    <section className="dash-glass flex flex-col rounded-xl p-5">
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <span className="size-2 rounded-full bg-chart-ram" />
-          <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">System RAM load</p>
-        </div>
-        <p className="font-mono text-lg font-medium tabular-nums text-chart-ram">{gb.toFixed(1)} GB</p>
-      </div>
-      <div className="mt-8 flex flex-1 flex-col justify-center">
-        <div className="relative h-2 rounded-full bg-muted">
-          <div
-            className="absolute inset-y-0 left-0 rounded-full bg-chart-ram"
-            style={{ width: `${width}%` }}
-          />
-          <span
-            className={cn(
-              "absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-chart-ram chart-orb-ram",
-            )}
-            style={{ left: `${width}%` }}
-          />
-        </div>
-      </div>
-      <dl className="mt-8 grid grid-cols-3 gap-3 text-xs text-muted-foreground">
-        <div>
-          <dt className="uppercase tracking-widest">Min</dt>
-          <dd className="font-mono tabular-nums text-foreground">{min.toFixed(1)}</dd>
-        </div>
-        <div className="text-center">
-          <dt className="uppercase tracking-widest">Avg</dt>
-          <dd className="font-mono tabular-nums text-foreground">{avg.toFixed(1)}</dd>
-        </div>
-        <div className="text-right">
-          <dt className="uppercase tracking-widest">Max</dt>
-          <dd className="font-mono tabular-nums text-foreground">{HOST_RAM_GB.toFixed(1)}</dd>
-        </div>
-      </dl>
-    </section>
+    <LoadChart
+      title="Host CPU"
+      points={points}
+      current={latest.toFixed(0)}
+      unit="%"
+      max={100}
+      color="var(--color-chart-cpu)"
+      stats={[
+        { label: "Min", value: `${s.min.toFixed(0)}%` },
+        { label: "Average", value: `${s.avg.toFixed(0)}%` },
+        { label: "Peak", value: `${s.max.toFixed(0)}%` },
+      ]}
+    />
+  );
+}
+
+export function RamLoadChart({ samples }: { samples: MetricSample[] }) {
+  const latest = samples[samples.length - 1];
+  const totalGb = latest?.hostRamGb ?? HOST_RAM_GB;
+  const points = useMemo(
+    () =>
+      downsample(filterRange(samples, "1h")).map((s) => ({
+        at: s.t,
+        value: ramFromPct(s.hostRamPct, s.hostRamGb ?? totalGb),
+      })),
+    [samples, totalGb],
+  );
+  const s = summary(points.map((p) => p.value));
+  return (
+    <LoadChart
+      title="Host memory"
+      points={points}
+      current={ramFromPct(latest?.hostRamPct ?? 0, totalGb).toFixed(1)}
+      unit={`/ ${totalGb.toFixed(0)} GB`}
+      max={totalGb}
+      color="var(--color-chart-ram)"
+      stats={[
+        { label: "Min", value: `${s.min.toFixed(1)} GB` },
+        { label: "Average", value: `${s.avg.toFixed(1)} GB` },
+        { label: "Peak", value: `${s.max.toFixed(1)} GB` },
+      ]}
+    />
   );
 }

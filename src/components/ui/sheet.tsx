@@ -16,7 +16,7 @@ const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed z-50 flex flex-col gap-4 bg-card p-5 text-card-foreground shadow-[var(--shadow-border)]",
+        "fixed z-50 flex flex-col gap-4 bg-surface p-4 text-card-foreground shadow-[var(--shadow-pop)]",
         side === "right" && "inset-y-0 right-0 h-full w-[min(100%,360px)] border-l border-border",
         side === "left" && "inset-y-0 left-0 h-full w-[min(100%,360px)] border-r border-border",
         side === "bottom" && "inset-x-0 bottom-0 w-full rounded-t-xl border-t border-border",

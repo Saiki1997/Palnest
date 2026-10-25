@@ -57,7 +57,7 @@ function OptimizePage() {
         description="Launch arguments, PalWorldSettings, and Engine.ini performance tweaks. Server performance and Network stack on top of a world preset. Port, query, public IP, and public port follow the selected world and its tunnel."
       />
 
-      <div className="mb-4 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {(
           [
             ["args", "Launch args"],
@@ -70,8 +70,8 @@ function OptimizePage() {
             type="button"
             onClick={() => setTab(id)}
             className={cn(
-              "h-9 rounded-sm px-3 text-sm font-medium",
-              tab === id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-[13px] font-medium",
+              tab === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {label}
@@ -90,7 +90,7 @@ function OptimizePage() {
                 setDraftArgs(null);
                 toast.success(`Applied ${p.name}`);
               }}
-              className="rounded-xl border border-border bg-card p-4 text-left transition-colors hover:bg-muted"
+              className="panel p-4 text-left transition-colors hover:bg-muted"
             >
               <p className="font-medium">{p.name}</p>
               <p className="mt-1 text-sm text-muted-foreground">{p.blurb}</p>
@@ -103,7 +103,7 @@ function OptimizePage() {
       ) : null}
 
       {tab === "args" ? (
-        <section className="rounded-xl border border-border bg-card p-5">
+        <section className="panel p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-medium">Command line</h2>
             <Button type="button" size="sm" disabled={!argsDirty} onClick={saveArgs}>
@@ -215,12 +215,12 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {showClient ? (
           <button
             type="button"
             onClick={() => setSide("client")}
-            className={cn("h-9 rounded-sm px-3 text-sm font-medium", side === "client" ? "bg-card text-foreground" : "text-muted-foreground")}
+            className={cn("h-8 rounded-md px-3 text-[13px] font-medium", side === "client" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
           >
             Client
           </button>
@@ -229,7 +229,7 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
           <button
             type="button"
             onClick={() => setSide("server")}
-            className={cn("h-9 rounded-sm px-3 text-sm font-medium", side === "server" ? "bg-card text-foreground" : "text-muted-foreground")}
+            className={cn("h-8 rounded-md px-3 text-[13px] font-medium", side === "server" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
           >
             Server
           </button>
@@ -243,8 +243,8 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
       <div className="grid gap-4 xl:grid-cols-2">
         <div className="grid gap-4 content-start">
           {side === "client" ? (
-            <article className="rounded-xl border border-border bg-card p-5">
-              <h2 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">UI scale {uiScale}%</h2>
+            <article className="panel p-4">
+              <h2 className="mb-3 eyebrow">UI scale {uiScale}%</h2>
               <input
                 type="range"
                 min={50}
@@ -261,9 +261,9 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
               </p>
             </article>
           ) : null}
-          <article className="rounded-xl border border-border bg-card p-5">
+          <article className="panel p-4">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
+              <h2 className="eyebrow">
                 Managed tweaks in this file {blocks.length} blocks
               </h2>
               <Button size="sm" variant="outline" onClick={() => setPasteOpen((v) => !v)}>
@@ -312,8 +312,8 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
               ))}
             </ul>
           </article>
-          <article className="rounded-xl border border-border bg-card p-5">
-            <h2 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">Built-in keys</h2>
+          <article className="panel p-4">
+            <h2 className="mb-3 eyebrow">Built-in keys</h2>
             {groupedEngineTweaks(tweaks)
               .filter(([, list]) => list.some((t) => t.target === "both" || t.target === target))
               .map(([label, list]) => (
@@ -340,7 +340,7 @@ function EngineIniEditor({ mode }: { mode: "client" | "server" | "both" }) {
               ))}
           </article>
         </div>
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <Badge variant="outline">Read-only protected after save</Badge>
             <div className="flex gap-2">

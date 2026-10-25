@@ -2,44 +2,49 @@ import { useEffect, useMemo, useState, lazy, Suspense, type ReactNode } from "re
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
-  Activity,
-  Cpu,
+  ArrowRight,
   Copy,
+  CopyPlus,
   Download,
-  LayoutGrid,
-  MemoryStick,
+  HardDrive,
   Play,
   Plus,
   RotateCw,
-  Server,
+  ScrollText,
   Shield,
   Square,
   Trash2,
+  Users,
+  Archive,
 } from "lucide-react";
 import { CreateDenDialog } from "@/components/create-den-dialog";
-import { HOST_RAM_GB, ramFromPct } from "@/lib/monitor";
 import { FirewallDialog } from "@/components/firewall-dialog";
 import { ImportServerDialog } from "@/components/import-server-dialog";
+import { PageHeader } from "@/components/page-header";
 import { DenChecklist } from "@/components/setup-guide";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { runChecker } from "@/lib/checker";
-import { OPTIMIZE_PRESETS } from "@/lib/args";
-import { fleetOf, runningCount } from "@/lib/fleet";
-import { useAppStore } from "@/lib/store";
-import { cn, formatUptime } from "@/lib/utils";
-import { joinHost } from "@/lib/tunnels";
-import { fetchSteamDedicatedLatest, type DedicatedLatest } from "@/lib/steam-latest";
-import { steamcmdDedicated } from "@/lib/runtime";
-import { CURRENT_GAME } from "@/lib/catalog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMonitorView } from "@/components/world-pulse";
+import { OPTIMIZE_PRESETS } from "@/lib/args";
+import { CURRENT_GAME } from "@/lib/catalog";
+import { runChecker } from "@/lib/checker";
+import { isDesktopApp } from "@/lib/desktop";
+import { fleetOf, runningCount } from "@/lib/fleet";
+import { useLiveStats } from "@/lib/live-stats";
+import { HOST_RAM_GB, ramFromPct, type MetricSample } from "@/lib/monitor";
+import { steamcmdDedicated } from "@/lib/runtime";
+import { fetchSteamDedicatedLatest, type DedicatedLatest } from "@/lib/steam-latest";
+import { useAppStore } from "@/lib/store";
+import { joinHost } from "@/lib/tunnels";
 import type { ServerState } from "@/lib/types";
+import { cn, formatUptime } from "@/lib/utils";
 
 const CpuLoadChart = lazy(() => import("@/components/dash-charts").then((m) => ({ default: m.CpuLoadChart })));
-const RamLoadBar = lazy(() => import("@/components/dash-charts").then((m) => ({ default: m.RamLoadBar })));
+const RamLoadChart = lazy(() => import("@/components/dash-charts").then((m) => ({ default: m.RamLoadChart })));
 
 export const Route = createFileRoute("/_app/")({ component: HomePage });
 
@@ -59,276 +64,211 @@ function HomePage() {
   const paths = useAppStore((s) => s.paths);
   const keys = useAppStore((s) => s.keys);
   const dismissGuide = useAppStore((s) => s.dismissGuide);
-  const startAllServers = useAppStore((s) => s.startAllServers);
-  const stopAllServers = useAppStore((s) => s.stopAllServers);
-  const startServer = useAppStore((s) => s.startServer);
-  const stopServer = useAppStore((s) => s.stopServer);
-  const restartServer = useAppStore((s) => s.restartServer);
-  const cloneServer = useAppStore((s) => s.cloneServer);
-  const removeServer = useAppStore((s) => s.removeServer);
-  const selectServer = useAppStore((s) => s.selectServer);
-  const applyPreset = useAppStore((s) => s.applyPreset);
-  const activeServerId = useAppStore((s) => s.activeServerId);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [firewallOpen, setFirewallOpen] = useState(false);
-  const [profiles, setProfiles] = useState<Record<string, string>>({});
-  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const fleet = fleetOf({ instances, server });
-  const live = runningCount(fleet);
-  const showServer = mode !== "client";
+  const dedicated = mode !== "client";
   const monitor = useMonitorView();
   const findings = useMemo(
     () => runChecker({ mods, mode, gameVersion: server.version, frameworks }),
     [mods, mode, server.version, frameworks],
   );
-  const attention = findings.filter((f) => f.severity !== "info").slice(0, 4);
-  const cpu = monitor.latest?.hostCpu ?? 0;
-  const ramGb = ramFromPct(monitor.latest?.hostRamPct ?? 0);
-  const enabled = mods.filter((m) => m.enabled);
+  const attention = findings.filter((f) => f.severity !== "info").slice(0, 5);
 
   return (
     <div>
       <CreateDenDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ImportServerDialog open={importOpen} onOpenChange={setImportOpen} />
-      <FirewallDialog open={firewallOpen} onOpenChange={setFirewallOpen} />
 
-      <header className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Dashboard</h1>
-            {showServer ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-muted/80 px-3 py-1 text-xs font-medium text-muted-foreground">
-                <span className={cn("size-1.5 rounded-full", live > 0 ? "bg-ok" : "bg-primary")} />
-                {fleet.length} Node{fleet.length === 1 ? "" : "s"}
-                <span aria-hidden>·</span>
-                {live} Active
-              </span>
-            ) : (
-              <Badge variant="outline">Client</Badge>
-            )}
-          </div>
-          <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            {showServer
-              ? "Global control center and orchestrator for dedicated Palworld servers."
-              : "What needs a look on this Palworld client, and what just changed."}
-          </p>
-        </div>
-        {showServer ? (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              <Download className="size-4" />
-              Import existing server
+      <PageHeader
+        title="Overview"
+        description={
+          dedicated
+            ? `${fleet.length} server${fleet.length === 1 ? "" : "s"} on this PC, ${runningCount(fleet)} running.`
+            : "Your Palworld client: frameworks, mods, and anything that needs a look."
+        }
+        actions={
+          dedicated ? (
+            <>
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Download />
+                Import server
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus />
+                New server
+              </Button>
+            </>
+          ) : (
+            <Button asChild>
+              <Link to="/frameworks">Set up UE4SS</Link>
             </Button>
-            <Button onClick={() => setCreateOpen(true)}>
-              <Plus className="size-4" />
-              New Server
-            </Button>
-          </div>
-        ) : (
-          <Button asChild>
-            <Link to="/frameworks">Install UE4SS</Link>
-          </Button>
-        )}
-      </header>
+          )
+        }
+      />
 
       <DenChecklist
         compact
         dismissed={guideDismissed}
         onDismiss={dismissGuide}
-        state={{
-          onboarded: true,
-          mode,
-          paths,
-          keys,
-          frameworks,
-          mods,
-          checkerRan,
-          instances,
-        }}
+        state={{ onboarded: true, mode, paths, keys, frameworks, mods, checkerRan, instances }}
       />
 
-      {showServer ? (
+      {dedicated ? (
         <>
-          <section className="dash-glass hub-rail mb-4 flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="size-2 rounded-full bg-primary" />
-                <p className="text-xs font-medium tracking-widest uppercase">Multi-server command hub</p>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Orchestrate lifecycle states and firewall rules across all configured server nodes.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2 sm:shrink-0">
-              <Button
-                variant="outline"
-                className="border-ok/40 text-ok hover:bg-ok/10"
-                onClick={() => {
-                  const r = startAllServers();
-                  if (r.started) toast.success(`Started ${r.started} node${r.started === 1 ? "" : "s"}`);
-                  if (r.skipped) toast.error(`${r.skipped} skipped — port or world clash`);
-                  if (!r.started && !r.skipped) toast.message("Every node is already running");
-                }}
-              >
-                <Play className="size-4" />
-                Start All
-              </Button>
-              <Button
-                variant="outline"
-                className="border-danger/40 text-danger hover:bg-danger/10"
-                onClick={() => {
-                  const n = stopAllServers();
-                  toast.message(n ? `Stopped ${n}` : "Nothing running");
-                }}
-              >
-                <Square className="size-3.5 fill-current" />
-                Stop All
-              </Button>
-              <Button variant="outline" onClick={() => setFirewallOpen(true)}>
-                <Shield className="size-4" />
-                Configure Firewall
-              </Button>
-            </div>
-          </section>
-
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Total servers"
-              value={String(fleet.length)}
-              badge="Configured"
-              icon={Server}
-            />
-            <StatCard
-              label="Active servers"
-              value={String(live)}
-              badge={live ? "Live" : "Stopped"}
-              icon={Activity}
-              valueClass={live ? "text-ok" : "text-primary"}
-            />
-            <StatCard
-              label="CPU usage"
-              value={`${cpu.toFixed(0)}%`}
-              badge="Host Load"
-              icon={Cpu}
-              valueClass="text-chart-cpu"
-            />
-            <StatCard
-              label="RAM usage"
-              value={`${ramGb.toFixed(1)} GB`}
-              badge={`/ ${HOST_RAM_GB.toFixed(1)} GB Total`}
-              icon={MemoryStick}
-              valueClass="text-chart-ram"
-            />
-          </div>
-
-          <div className="mb-4 grid gap-3 lg:grid-cols-2">
-            <Suspense fallback={<div className="dash-glass h-56 rounded-xl" />}>
-              <CpuLoadChart samples={monitor.samples} live={live > 0} />
+          <HostStrip latest={monitor.latest} running={runningCount(fleet)} total={fleet.length} />
+          <ServerGrid fleet={fleet} onImport={() => setImportOpen(true)} />
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <Suspense fallback={<div className="panel h-[228px]" />}>
+              <CpuLoadChart samples={monitor.samples} />
             </Suspense>
-            <Suspense fallback={<div className="dash-glass h-56 rounded-xl" />}>
-              <RamLoadBar samples={monitor.samples} />
+            <Suspense fallback={<div className="panel h-[228px]" />}>
+              <RamLoadChart samples={monitor.samples} />
             </Suspense>
           </div>
-
-          <PalServerUpdateStrip version={server.version} installPath={server.installPath || paths.server} serverId={server.id} />
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {fleet.map((inst) => (
-              <NodeCard
-                key={inst.id}
-                inst={inst}
-                selected={inst.id === (activeServerId || server.id)}
-                profile={profiles[inst.id] ?? "community"}
-                onSelect={() => selectServer(inst.id)}
-                onProfile={(id) => {
-                  selectServer(inst.id);
-                  applyPreset(id);
-                  setProfiles((prev) => ({ ...prev, [inst.id]: id }));
-                  const label = PROFILES.find((p) => p.id === id)?.label ?? id;
-                  toast.success(`${inst.name} set to ${label}`);
-                }}
-                onStart={() => {
-                  const err = startServer(inst.id);
-                  if (err) toast.error(err);
-                  else toast.success(`${inst.name} started`);
-                }}
-                onStop={() => {
-                  stopServer(inst.id);
-                  toast.message(`${inst.name} stopped`);
-                }}
-                onRestart={() => {
-                  const err = restartServer(inst.id);
-                  if (err) toast.error(err);
-                  else toast.success(`${inst.name} restarting`);
-                }}
-                onClone={() => {
-                  const r = cloneServer(inst.id);
-                  if (r.error) toast.error(r.error);
-                  else toast.success("Server cloned");
-                }}
-                onDelete={() => setPendingDelete(inst.id)}
-                cpu={
-                  inst.running
-                    ? inst.id === (activeServerId || server.id)
-                      ? monitor.latest?.procCpu ?? 18
-                      : 8 + hash01(inst.id) * 28
-                    : 0
-                }
-                ramMb={
-                  inst.running
-                    ? inst.id === (activeServerId || server.id)
-                      ? Math.round((monitor.latest?.procRamGb ?? 3.2) * 1024)
-                      : Math.round(900 + hash01(inst.id) * 2800)
-                    : 0
-                }
-                canDelete={fleet.length > 1}
-              />
-            ))}
-            <button
-              type="button"
-              onClick={() => setImportOpen(true)}
-              className="flex min-h-[220px] flex-col items-start justify-between rounded-xl border border-dashed border-primary/40 bg-card/60 p-5 text-left transition-colors hover:border-primary hover:bg-card"
-            >
-              <div>
-                <p className="font-medium">Import existing server</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Point at a PalServer folder you already run. PalWorldSettings.ini, mods, and the world come with it.
-                </p>
-              </div>
-              <span className="inline-flex items-center gap-2 text-sm text-primary">
-                <Download className="size-4" />
-                Browse PalServer folder
-              </span>
-            </button>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <Attention items={attention} />
+            <PalServerUpdate version={server.version} installPath={server.installPath || paths.server} serverId={server.id} />
           </div>
         </>
       ) : (
-        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Mode" value="Client" badge="Dedicated pages hidden" icon={Server} />
-          <StatCard label="Mods" value={String(enabled.length)} badge="Live" icon={LayoutGrid} />
-          <StatCard
-            label="Health"
-            value={attention.length ? `${attention.length}` : "Clear"}
-            badge={attention.length ? "To check" : "Nothing blocking"}
-            icon={Shield}
-            valueClass={attention.length ? "text-warn" : "text-ok"}
-          />
-          <StatCard
-            label="UE4SS"
-            value={frameworks.ue4ss.clientVersion ?? "—"}
-            badge={frameworks.palschema.clientVersion ? `PalSchema ${frameworks.palschema.clientVersion}` : "PalSchema off"}
-            icon={Cpu}
-          />
-        </div>
+        <>
+          <div className="panel mb-6 grid grid-cols-2 divide-border lg:grid-cols-4 lg:divide-x">
+            <Stat label="Mods enabled" value={String(mods.filter((m) => m.enabled).length)} hint={`${mods.length} installed`} />
+            <Stat label="UE4SS" value={frameworks.ue4ss.clientVersion ?? "Not installed"} hint="Client" />
+            <Stat
+              label="PalSchema"
+              value={frameworks.palschema.clientVersion ?? "Off"}
+              hint={frameworks.palschema.clientVersion ? "Installed" : "Optional"}
+            />
+            <Stat
+              label="Health"
+              value={attention.length ? `${attention.length} to check` : "All clear"}
+              hint="From the checker"
+              tone={attention.length ? "warn" : "ok"}
+            />
+          </div>
+          <Attention items={attention} />
+        </>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value, hint, tone }: { label: string; value: string; hint?: ReactNode; tone?: "ok" | "warn" }) {
+  return (
+    <div className="min-w-0 px-4 py-3.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 truncate text-xl font-semibold tabular-nums",
+          tone === "ok" && "text-ok",
+          tone === "warn" && "text-warn",
+        )}
+      >
+        {value}
+      </p>
+      {hint ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p> : null}
+    </div>
+  );
+}
+
+function HostStrip({ latest, running, total }: { latest?: MetricSample; running: number; total: number }) {
+  const totalGb = latest?.hostRamGb ?? HOST_RAM_GB;
+  const measured = Boolean(latest);
+  return (
+    <div className="panel mb-6 grid grid-cols-2 lg:grid-cols-4 lg:divide-x lg:divide-border">
+      <Stat label="Servers running" value={`${running} / ${total}`} hint={running ? "Live now" : "All stopped"} tone={running ? "ok" : undefined} />
+      <Stat label="Host CPU" value={measured ? `${latest!.hostCpu.toFixed(0)}%` : "—"} hint="Whole PC" />
+      <Stat
+        label="Memory"
+        value={measured ? `${ramFromPct(latest!.hostRamPct, totalGb).toFixed(1)} GB` : "—"}
+        hint={measured ? `of ${totalGb.toFixed(0)} GB` : "Measured while a server runs"}
+      />
+      <Stat
+        label="Disk free"
+        value={measured && latest!.diskFreeGb ? `${latest!.diskFreeGb.toFixed(0)} GB` : "—"}
+        hint={measured && latest!.diskUsedPct ? `${latest!.diskUsedPct.toFixed(0)}% used on the server drive` : "Server drive"}
+      />
+    </div>
+  );
+}
+
+function ServerGrid({ fleet, onImport }: { fleet: ServerState[]; onImport: () => void }) {
+  const server = useAppStore((s) => s.server);
+  const activeServerId = useAppStore((s) => s.activeServerId);
+  const startAllServers = useAppStore((s) => s.startAllServers);
+  const stopAllServers = useAppStore((s) => s.stopAllServers);
+  const removeServer = useAppStore((s) => s.removeServer);
+  const [firewallOpen, setFirewallOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const anyRunning = fleet.some((i) => i.running);
+
+  return (
+    <section>
+      <FirewallDialog open={firewallOpen} onOpenChange={setFirewallOpen} />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">Servers</h2>
+        <div className="flex flex-wrap gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              const r = startAllServers();
+              if (r.started) toast.success(`Started ${r.started} server${r.started === 1 ? "" : "s"}`);
+              if (r.skipped) toast.error(`${r.skipped} skipped because of a port or world clash`);
+              if (!r.started && !r.skipped) toast.message("Every server is already running");
+            }}
+          >
+            <Play />
+            Start all
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!anyRunning}
+            onClick={() => {
+              const n = stopAllServers();
+              toast.message(n ? `Stopped ${n}` : "Nothing running");
+            }}
+          >
+            <Square />
+            Stop all
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setFirewallOpen(true)}>
+            <Shield />
+            Firewall
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+        {fleet.map((inst) => (
+          <ServerCard
+            key={inst.id}
+            inst={inst}
+            selected={inst.id === (activeServerId || server.id)}
+            canDelete={fleet.length > 1}
+            onDelete={() => setPendingDelete(inst.id)}
+          />
+        ))}
+        <button
+          type="button"
+          onClick={onImport}
+          className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border p-5 text-center text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+        >
+          <Download className="size-5" />
+          <span className="text-[13px] font-medium text-foreground">Import a server you already run</span>
+          <span className="max-w-64 text-xs">Settings, mods and the world come along. Nothing is copied or moved.</span>
+        </button>
+      </div>
 
       <Dialog open={Boolean(pendingDelete)} onOpenChange={(v) => !v && setPendingDelete(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete this server?</DialogTitle>
+            <DialogTitle>Remove this server?</DialogTitle>
             <DialogDescription>
-              {fleet.find((i) => i.id === pendingDelete)?.name ?? "This node"} will be removed from Palnest. The PalServer folder on disk is left in place.
+              {fleet.find((i) => i.id === pendingDelete)?.name ?? "This server"} is removed from Palnest. Its PalServer folder on disk stays where it is.
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
@@ -345,118 +285,91 @@ function HomePage() {
                 setPendingDelete(null);
               }}
             >
-              Delete server
+              Remove server
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-      {attention.length > 0 ? (
-        <section className="dash-glass mt-4 rounded-xl p-5">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h2 className="font-medium">Needs a look</h2>
-            <Link to="/checker" className="text-sm text-primary">
-              Open checker
-            </Link>
-          </div>
-          <ul className="divide-y divide-border">
-            {attention.map((f) => (
-              <li key={f.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{f.title}</p>
-                  <p className="text-sm text-muted-foreground">{f.detail}</p>
-                </div>
-                <Badge variant={f.severity === "error" ? "danger" : "warn"}>{f.kind}</Badge>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-    </div>
+    </section>
   );
 }
 
-function StatCard({
-  label,
-  value,
-  badge,
-  icon: Icon,
-  valueClass,
-}: {
-  label: string;
-  value: string;
-  badge: string;
-  icon: typeof Server;
-  valueClass?: string;
-}) {
+function IconAction({ label, onClick, children, danger, disabled }: { label: string; onClick?: () => void; children: ReactNode; danger?: boolean; disabled?: boolean }) {
   return (
-    <article className="dash-glass relative rounded-xl p-4">
-      <p className="pr-10 text-xs font-medium tracking-widest text-muted-foreground uppercase">{label}</p>
-      <span className="absolute top-4 right-4 flex size-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-      <p className={cn("mt-5 text-3xl font-semibold tracking-tight tabular-nums", valueClass)}>{value}</p>
-      <span className="mt-3 inline-flex rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">{badge}</span>
-    </article>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+          className={cn(danger && "hover:bg-danger/10 hover:text-danger")}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
 
-function hash01(id: string) {
-  let n = 0;
-  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) >>> 0;
-  return (n % 1000) / 1000;
-}
-
-function NodeCard({
+function ServerCard({
   inst,
   selected,
-  profile,
-  onSelect,
-  onProfile,
-  onStart,
-  onStop,
-  onRestart,
-  onClone,
-  onDelete,
-  cpu,
-  ramMb,
   canDelete,
+  onDelete,
 }: {
   inst: ServerState;
   selected: boolean;
-  profile: string;
-  onSelect: () => void;
-  onProfile: (id: string) => void;
-  onStart: () => void;
-  onStop: () => void;
-  onRestart: () => void;
-  onClone: () => void;
-  onDelete: () => void;
-  cpu: number;
-  ramMb: number;
   canDelete: boolean;
+  onDelete: () => void;
 }) {
+  const startServer = useAppStore((s) => s.startServer);
+  const stopServer = useAppStore((s) => s.stopServer);
+  const restartServer = useAppStore((s) => s.restartServer);
+  const cloneServer = useAppStore((s) => s.cloneServer);
+  const selectServer = useAppStore((s) => s.selectServer);
+  const applyPreset = useAppStore((s) => s.applyPreset);
+  const latest = useAppStore((s) => s.monitor.samples[s.monitor.samples.length - 1]);
+  const measured = useLiveStats((s) => s.byId[inst.id]);
+  const [profile, setProfile] = useState("community");
   const binding = inst.running && !inst.listenAt;
-  const life = !inst.running ? "Stopped" : binding ? "Binding UDP" : "Running";
-  const uptime = inst.running ? formatUptime(inst.listenAt ?? inst.startedAt) : "—";
+  const state = !inst.running ? "Stopped" : binding ? "Starting" : "Running";
+  const online = inst.players.filter((p) => p.online).length;
+  const totalGb = latest?.hostRamGb ?? HOST_RAM_GB;
+  // The browser preview has no process to measure, so it shows the demo series for the selected server.
+  const stats = inst.running
+    ? measured ?? (!isDesktopApp() && selected && latest ? { cpu: latest.procCpu, ramMb: latest.procRamGb * 1024 } : null)
+    : null;
+  const join = joinHost(inst);
 
   return (
-    <article
-      className={cn(
-        "dash-glass rounded-xl p-5 transition-[box-shadow] duration-150",
-        selected && "node-active",
-      )}
-    >
+    <article className={cn("panel panel-hover flex flex-col p-4", selected && "panel-selected")}>
       <div className="flex items-start justify-between gap-3">
-        <button type="button" className="min-w-0 text-left" onClick={onSelect}>
+        <button type="button" className="min-w-0 text-left" onClick={() => selectServer(inst.id)}>
           <div className="flex items-center gap-2">
-            <span className={cn("size-2.5 rounded-full", inst.running ? (binding ? "bg-warn" : "bg-ok") : "bg-muted-foreground/50")} />
-            <h2 className="truncate font-medium">{inst.name}</h2>
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                !inst.running ? "bg-muted-foreground/40" : binding ? "animate-pulse bg-warn" : "bg-ok",
+              )}
+            />
+            <h3 className="truncate text-[15px] font-semibold">{inst.name}</h3>
+            <Badge variant={!inst.running ? "default" : binding ? "warn" : "ok"}>{state}</Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">{inst.description || "Palworld dedicated server node"}</p>
+          <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{inst.description || `PalServer ${inst.version}`}</p>
         </button>
-        <Select value={profile} onValueChange={onProfile}>
-          <SelectTrigger className="h-9 w-auto min-w-28 shrink-0 rounded-full border-transparent bg-muted px-3 text-xs">
+        <Select
+          value={profile}
+          onValueChange={(id) => {
+            selectServer(inst.id);
+            applyPreset(id);
+            setProfile(id);
+            toast.success(`${inst.name} set to ${PROFILES.find((p) => p.id === id)?.label ?? id}`);
+          }}
+        >
+          <SelectTrigger aria-label="Performance profile" className="h-7 w-auto shrink-0 gap-1 border-transparent bg-muted px-2 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -469,103 +382,178 @@ function NodeCard({
         </Select>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <MetaTile
-          label="Ports (game/query/rcon)"
-          value={`${inst.port}/${inst.queryPort}/${inst.rconPort}`}
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard.writeText(join).then(
+            () => toast.success(`Copied ${join}`),
+            () => toast.message(join),
+          );
+        }}
+        className="mt-3 flex items-center justify-between gap-2 rounded-md bg-muted px-2.5 py-1.5 text-left font-mono text-xs transition-colors hover:bg-muted/70"
+      >
+        <span className="truncate">{join}</span>
+        <Copy className="size-3.5 shrink-0 text-muted-foreground" />
+      </button>
+
+      <dl className="mt-3 grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <dt className="text-muted-foreground">Players</dt>
+          <dd className="mt-0.5 font-medium tabular-nums">
+            {online} / {inst.maxPlayers}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Uptime</dt>
+          <dd className="mt-0.5 font-medium tabular-nums">{inst.running ? formatUptime(inst.listenAt ?? inst.startedAt) : "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Ports</dt>
+          <dd className="mt-0.5 font-mono tabular-nums">
+            {inst.port}/{inst.queryPort}
+          </dd>
+        </div>
+      </dl>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
+        <Meter label="CPU" value={stats ? `${stats.cpu.toFixed(0)}%` : "—"} pct={stats?.cpu ?? 0} className="bg-chart-cpu" />
+        <Meter
+          label="Memory"
+          value={stats ? `${(stats.ramMb / 1024).toFixed(1)} GB` : "—"}
+          pct={stats ? (stats.ramMb / (totalGb * 1024)) * 100 : 0}
+          className="bg-chart-ram"
         />
-        <MetaTile label="Max players" value={`${inst.maxPlayers} Slots`} />
-        <MetaTile label="Lifecycle state" value={life} />
-        <MetaTile label="Real uptime" value={uptime} />
       </div>
 
-      <div className="mt-4 grid gap-3">
-        <div>
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">CPU Overhead</span>
-            <span className="font-mono text-chart-cpu">{cpu.toFixed(1)}%</span>
-          </div>
-          <Progress value={cpu} indicatorClassName="bg-chart-cpu" />
-        </div>
-        <div>
-          <div className="mb-1 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">RAM Allocation</span>
-            <span className="font-mono text-chart-ram">{ramMb} MB</span>
-          </div>
-          <Progress value={Math.min(100, (ramMb / (HOST_RAM_GB * 1024)) * 100)} indicatorClassName="bg-chart-ram" />
-        </div>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 flex items-center gap-1.5 border-t border-border pt-3">
         {inst.running ? (
-          <Button size="sm" variant="outline" className="border-danger/40 text-danger hover:bg-danger/10" onClick={onStop}>
-            <Square className="size-3.5" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              stopServer(inst.id);
+              toast.message(`${inst.name} stopped`);
+            }}
+          >
+            <Square className="fill-current" />
             Stop
           </Button>
         ) : (
-          <Button size="sm" className="bg-ok text-background hover:opacity-90" onClick={onStart}>
-            <Play className="size-3.5" />
+          <Button
+            size="sm"
+            onClick={() => {
+              const err = startServer(inst.id);
+              if (err) toast.error(err);
+              else toast.success(`${inst.name} starting`);
+            }}
+          >
+            <Play className="fill-current" />
             Start
           </Button>
         )}
-        <Button size="sm" variant="outline" onClick={onRestart} disabled={!inst.running}>
-          <RotateCw className="size-3.5" />
-          Restart
-        </Button>
-      </div>
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/logs" onClick={onSelect}>
-            Console
-          </Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/server" search={{ tab: "players" }} onClick={onSelect}>
-            Players
-          </Link>
-        </Button>
-        <Button size="sm" variant="outline" asChild>
-          <Link to="/worlds" search={{ tab: "backups" }} onClick={onSelect}>
-            Backups
-          </Link>
-        </Button>
-      </div>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
+        <IconAction
+          label="Restart"
+          disabled={!inst.running}
           onClick={() => {
-            const addr = joinHost(inst);
-            void navigator.clipboard.writeText(addr).then(
-              () => toast.success(`Copied ${addr}`),
-              () => toast.message(addr),
-            );
+            const err = restartServer(inst.id);
+            if (err) toast.error(err);
+            else toast.success(`${inst.name} restarting`);
           }}
         >
-          Copy join
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onClone}>
-          <Copy className="size-3.5" />
-          Clone
-        </Button>
-        <Button size="sm" variant="ghost" className="text-danger hover:text-danger" disabled={!canDelete || inst.running} onClick={onDelete}>
-          <Trash2 className="size-3.5" />
-          Delete
-        </Button>
+          <RotateCw />
+        </IconAction>
+        <div className="ml-auto flex items-center">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon-sm" variant="ghost" asChild>
+                <Link to="/logs" aria-label="Console" onClick={() => selectServer(inst.id)}>
+                  <ScrollText />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Console</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon-sm" variant="ghost" asChild>
+                <Link to="/server" search={{ tab: "players" }} aria-label="Players" onClick={() => selectServer(inst.id)}>
+                  <Users />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Players</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon-sm" variant="ghost" asChild>
+                <Link to="/worlds" search={{ tab: "backups" }} aria-label="Backups" onClick={() => selectServer(inst.id)}>
+                  <Archive />
+                </Link>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Backups</TooltipContent>
+          </Tooltip>
+          <IconAction
+            label="Clone"
+            onClick={() => {
+              const r = cloneServer(inst.id);
+              if (r.error) toast.error(r.error);
+              else toast.success("Server cloned");
+            }}
+          >
+            <CopyPlus />
+          </IconAction>
+          <IconAction label={inst.running ? "Stop before removing" : "Remove"} danger disabled={!canDelete || inst.running} onClick={onDelete}>
+            <Trash2 />
+          </IconAction>
+        </div>
       </div>
     </article>
   );
 }
 
-function PalServerUpdateStrip({
-  version,
-  installPath,
-  serverId,
-}: {
-  version: string;
-  installPath: string;
-  serverId: string;
-}) {
+function Meter({ label, value, pct, className }: { label: string; value: string; pct: number; className: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono tabular-nums">{value}</span>
+      </div>
+      <Progress value={Math.min(100, pct)} indicatorClassName={className} />
+    </div>
+  );
+}
+
+function Attention({ items }: { items: ReturnType<typeof runChecker> }) {
+  return (
+    <section className="panel p-4">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h2 className="text-[13px] font-medium">Needs a look</h2>
+        <Link to="/checker" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+          Open checker
+          <ArrowRight className="size-3" />
+        </Link>
+      </div>
+      {items.length ? (
+        <ul className="divide-y divide-border">
+          {items.map((f) => (
+            <li key={f.id} className="flex items-start justify-between gap-3 py-2.5 first:pt-1 last:pb-0">
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium">{f.title}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{f.detail}</p>
+              </div>
+              <Badge variant={f.severity === "error" ? "danger" : "warn"}>{f.kind}</Badge>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="py-3 text-xs text-muted-foreground">Nothing is blocking. Mods, frameworks and versions line up.</p>
+      )}
+    </section>
+  );
+}
+
+function PalServerUpdate({ version, installPath, serverId }: { version: string; installPath: string; serverId: string }) {
   const updateServer = useAppStore((s) => s.updateServer);
   const [hit, setHit] = useState<DedicatedLatest | null>(null);
   const [busy, setBusy] = useState(false);
@@ -583,22 +571,24 @@ function PalServerUpdateStrip({
   }, [version]);
 
   return (
-    <article className="dash-glass mb-4 flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">PalServer {version}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {busy && !hit
-            ? "Checking SteamCMD for Palworld dedicated…"
-            : hit
-              ? hit.newer
-                ? `Update available: ${hit.version}${hit.build ? ` · manifest ${hit.build}` : ""}`
-                : `Up to date with the ${CURRENT_GAME} dedicated line.`
-              : "SteamCMD check did not finish."}
-        </p>
+    <section className="panel flex flex-col p-4">
+      <div className="flex items-center gap-2">
+        <HardDrive className="size-4 text-muted-foreground" />
+        <h2 className="text-[13px] font-medium">PalServer {version}</h2>
+        {hit?.newer ? <Badge variant="primary">Update available</Badge> : hit ? <Badge variant="ok">Up to date</Badge> : null}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <p className="mt-2 flex-1 text-xs text-muted-foreground">
+        {busy && !hit
+          ? "Checking Steam for the latest dedicated server build…"
+          : hit
+            ? hit.newer
+              ? `Version ${hit.version}${hit.build ? ` (build ${hit.build})` : ""} is out. Update with SteamCMD; the server restarts after.`
+              : `You are on the current ${CURRENT_GAME} dedicated server line.`
+            : "Could not reach Steam. Check again in a moment."}
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={busy} onClick={check}>
-          {busy ? "Checking…" : "Check for updates"}
+          {busy ? "Checking…" : "Check again"}
         </Button>
         {hit?.newer ? (
           <Button
@@ -613,15 +603,6 @@ function PalServerUpdateStrip({
           </Button>
         ) : null}
       </div>
-    </article>
-  );
-}
-
-function MetaTile({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="rounded-md bg-muted/80 px-3 py-3">
-      <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 font-mono text-sm tabular-nums">{value}</p>
-    </div>
+    </section>
   );
 }

@@ -105,7 +105,6 @@ test("ban list round-trips steam ids", () => {
 });
 
 test("schedule fires once per day at HH:MM", () => {
-  const now = new Date("2026-09-19T06:00:00.000Z");
   // dueSchedule uses local hours; construct a local date
   const local = new Date(2026, 8, 19, 6, 0, 5);
   assert.equal(dueSchedule("06:00", local, ""), true);

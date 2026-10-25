@@ -63,7 +63,7 @@ function CheckerPage() {
       </div>
 
       {findings.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card px-5 py-12 text-center">
+        <div className="panel px-5 py-12 text-center">
           <p className="font-medium">No start conflicts</p>
           <p className="mt-1 text-sm text-muted-foreground">
             No overlapping packs, missing files, or missing UE4SS / PalSchema. PalServer can start.
@@ -72,7 +72,7 @@ function CheckerPage() {
       ) : (
         <ul className="space-y-3">
           {findings.map((f) => (
-            <li key={f.id} className="rounded-xl border border-border bg-card p-4">
+            <li key={f.id} className="panel p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
@@ -106,7 +106,7 @@ function CheckerPage() {
 
 function Score({ label, value, tone }: { label: string; value: number; tone: "danger" | "warn" | "ok" }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="panel p-4">
       <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
       <p className={`mt-2 text-2xl font-medium tabular-nums ${tone === "danger" ? "text-danger" : tone === "warn" ? "text-warn" : "text-ok"}`}>
         {value}

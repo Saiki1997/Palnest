@@ -200,7 +200,7 @@ function ModFullView() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="overflow-hidden panel">
           <div className="relative aspect-[16/9] bg-muted">
             {hit.image ? (
               <img src={hit.image} alt="" className="size-full object-cover" />

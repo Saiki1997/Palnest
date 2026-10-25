@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
-import { PathField } from "@/components/path-field";
 import { StatusPips, useFleet } from "@/components/fleet-bar";
 import { ImportServerDialog } from "@/components/import-server-dialog";
 import { JoinCard } from "@/components/join-card";
@@ -12,18 +11,10 @@ import { GuildPanel } from "@/components/guild-panel";
 import { SaveBar } from "@/components/save-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { overlayInstanceArgs, instanceExe, runningCount, suggestedInstallPath } from "@/lib/fleet";
+import { overlayInstanceArgs, instanceExe } from "@/lib/fleet";
 import { joinHost, joinIp } from "@/lib/tunnels";
 import { renderCommandLine } from "@/lib/args";
 import { downloadText } from "@/lib/download";
@@ -56,12 +47,9 @@ function ServerPage() {
   const restartServer = useAppStore((s) => s.restartServer);
   const updateServer = useAppStore((s) => s.updateServer);
   const rollbackServer = useAppStore((s) => s.rollbackServer);
-  const createServer = useAppStore((s) => s.createServer);
   const cloneServer = useAppStore((s) => s.cloneServer);
   const removeServer = useAppStore((s) => s.removeServer);
   const selectServer = useAppStore((s) => s.selectServer);
-  const startAllServers = useAppStore((s) => s.startAllServers);
-  const stopAllServers = useAppStore((s) => s.stopAllServers);
   const patchServer = useAppStore((s) => s.patchServer);
   const paths = useAppStore((s) => s.paths);
   const worlds = useAppStore((s) => s.worlds);
@@ -81,14 +69,6 @@ function ServerPage() {
   const ops = useAppStore((s) => s.ops);
 
   const [importOpen, setImportOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [newPath, setNewPath] = useState("");
-  const [newWorld, setNewWorld] = useState<"new" | "clone" | "existing">("new");
-  const [newWorldId, setNewWorldId] = useState(worlds[0]?.id ?? "");
-  const [newPlayers, setNewPlayers] = useState("32");
-  const [newCommunity, setNewCommunity] = useState(false);
   const [broadcast, setBroadcast] = useState("");
   const [banName, setBanName] = useState("");
   const [banSteam, setBanSteam] = useState("");
@@ -105,7 +85,6 @@ function ServerPage() {
   const newer = server.versions.filter((v) => v.version !== server.version);
   const canRollback = server.history.length > 1;
   const world = worlds.find((w) => w.id === server.worldId);
-  const live = runningCount(fleet);
   const cmd = renderCommandLine(instanceExe(server, paths.server), overlayInstanceArgs(args, server));
 
   function boot(id: string) {
@@ -118,176 +97,23 @@ function ServerPage() {
     <div>
       <ImportServerDialog open={importOpen} onOpenChange={setImportOpen} />
       <PageHeader
-        title="Server"
-        description="Create extra PalServer copies on this host, run them together on staggered ports, and import a box you already keep."
+        title={server.name}
+        description={`PalServer ${server.version} · UDP ${server.port} · ${
+          !server.running ? "stopped" : server.listenAt ? `running for ${formatUptime(server.listenAt ?? server.startedAt)}` : "starting"
+        }${world ? ` · world ${world.name}` : ""}`}
         actions={
           <>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const r = startAllServers();
-                if (r.started) toast.success(`Started ${r.started} world${r.started === 1 ? "" : "s"}`);
-                if (r.skipped) toast.error(`${r.skipped} skipped — port or world clash`);
-              }}
-            >
-              Start all
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/tunnels">Tunnels</Link>
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                const n = stopAllServers();
-                toast.message(n ? `Stopped ${n}` : "Nothing running");
-              }}
-            >
-              Stop all
-            </Button>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger asChild>
-                <Button>New world</Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create a dedicated server</DialogTitle>
-                  <DialogDescription>
-                    Palnest assigns the next free port block (game / REST / query / RCON) so two PalServers can run on one machine.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="new-name">Name</Label>
-                    <Input
-                      id="new-name"
-                      value={newName}
-                      onChange={(e) => {
-                        setNewName(e.target.value);
-                        if (!newPath) setNewPath(suggestedInstallPath(paths.server, e.target.value || "New world"));
-                      }}
-                      placeholder="Ashfall"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="new-desc">Description</Label>
-                    <Input id="new-desc" value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="PvE, no raids." />
-                  </div>
-                  <PathField
-                    id="new-path"
-                    label="PalServer folder"
-                    value={newPath}
-                    onChange={setNewPath}
-                    placeholder={suggestedInstallPath(paths.server, newName || "Ashfall")}
-                    hint="A second copy of PalServer, or a SteamCMD install of its own. Do not point two live worlds at the same Saved folder."
-                  />
-                  <div className="grid gap-2">
-                    <Label>World</Label>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {(
-                        [
-                          ["new", "Fresh world"],
-                          ["clone", "Clone active"],
-                          ["existing", "Use existing"],
-                        ] as const
-                      ).map(([id, label]) => (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setNewWorld(id)}
-                          className={cn(
-                            "h-11 rounded-sm border px-3 text-sm",
-                            newWorld === id ? "border-primary bg-background" : "border-border hover:bg-muted",
-                          )}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    {newWorld === "existing" ? (
-                      <select
-                        className="h-11 rounded-sm border border-border bg-background px-3 text-sm"
-                        value={newWorldId}
-                        onChange={(e) => setNewWorldId(e.target.value)}
-                      >
-                        {worlds.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : null}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-2">
-                      <Label htmlFor="new-max">Max players</Label>
-                      <Input id="new-max" inputMode="numeric" value={newPlayers} onChange={(e) => setNewPlayers(e.target.value)} />
-                    </div>
-                    <label className="flex items-end gap-2 pb-2 text-sm">
-                      <input type="checkbox" checked={newCommunity} onChange={(e) => setNewCommunity(e.target.checked)} />
-                      Community list
-                    </label>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      if (!newName.trim()) {
-                        toast.error("Name the world");
-                        return;
-                      }
-                      const result = createServer({
-                        name: newName.trim(),
-                        description: newDesc,
-                        installPath: newPath,
-                        worldMode: newWorld,
-                        worldId: newWorldId,
-                        maxPlayers: Number(newPlayers) || 32,
-                        community: newCommunity,
-                      });
-                      if (result.error) {
-                        toast.error(result.error);
-                        return;
-                      }
-                      toast.success(`${newName.trim()} is ready. Start it when you want the second island live.`);
-                      setCreateOpen(false);
-                      setNewName("");
-                      setNewDesc("");
-                    }}
-                  >
-                    Create
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Button variant="outline" onClick={() => setImportOpen(true)}>
-              Import existing server
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              Import server
             </Button>
           </>
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          {fleet.length} world{fleet.length === 1 ? "" : "s"} · {live} running
-        </p>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/tunnels">Tunnels</Link>
-        </Button>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-2">
-        {fleet.map((inst) => (
-          <button
-            key={inst.id}
-            type="button"
-            onClick={() => selectServer(inst.id)}
-            className={cn(
-              "inline-flex h-10 items-center gap-2 rounded-full border px-3 text-sm",
-              inst.id === server.id ? "border-primary bg-card" : "border-border bg-muted/40 text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <span className={cn("size-2 rounded-full", inst.running ? "bg-ok" : "bg-muted-foreground/40")} />
-            {inst.name}
-          </button>
-        ))}
-      </div>
-
-      <section className="mb-5 overflow-hidden rounded-xl border border-border bg-card">
+      <section className="mb-5 overflow-hidden panel">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className={cn("size-2 rounded-full", frameworks.ue4ss.serverVersion ? "bg-ok" : "bg-muted-foreground/50")} />
@@ -338,7 +164,7 @@ function ServerPage() {
         </div>
       </section>
 
-      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-5 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {(
           [
             ["settings", "Settings"],
@@ -353,8 +179,8 @@ function ServerPage() {
             type="button"
             onClick={() => void navigate({ search: { tab: id } })}
             className={cn(
-              "h-9 rounded-sm px-3 text-sm font-medium",
-              tab === id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-[13px] font-medium",
+              tab === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {label}
@@ -463,7 +289,7 @@ function ServerPage() {
         />
       </div>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="font-medium">{server.name}</h2>
@@ -546,7 +372,7 @@ function ServerPage() {
         />
       </div>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Live ops</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           REST /v1/api on port {server.restPort}. Palnest.exe hits the running box; this preview logs the same actions.
@@ -583,7 +409,7 @@ function ServerPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Ban / allow list</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Written to banlist.txt next to Saved. Allow list is optional — leave empty to let anyone in.
@@ -661,7 +487,7 @@ function ServerPage() {
         </label>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-medium">SteamCMD latest</h2>
@@ -698,7 +524,7 @@ function ServerPage() {
         )}
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <h2 className="font-medium">Update and rollback</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           SteamCMD-style hops on the Palworld 1.0 line, per world. Palnest snapshots the bound world first, then asks the checker
@@ -814,7 +640,7 @@ function PlayersTab({
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="panel p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="font-medium">Players</h2>
@@ -990,7 +816,7 @@ function PlayersTab({
 
 function Info({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4">
+    <div className="panel p-4">
       <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
       <p className="mt-2 text-lg font-medium break-all">{value}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground break-all">{hint}</p> : null}

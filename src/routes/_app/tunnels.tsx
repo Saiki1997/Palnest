@@ -93,7 +93,6 @@ function TunnelsPage() {
       void hostDetectAgents().then((hit) => applyScan(hit, false));
     }, 8000);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missingAgents]);
 
   if (mode === "client") return <Navigate to="/" />;
@@ -131,7 +130,7 @@ function TunnelsPage() {
         description="Skip router port-forward. playit.gg and PortWarp both carry Palworld UDP so friends can join from outside the LAN."
       />
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-medium">Tunnel agents</h2>
@@ -170,7 +169,7 @@ function TunnelsPage() {
               selectServer(box.id);
             }}
             className={cn(
-              "h-11 rounded-sm border px-3 text-sm font-medium",
+              "h-9 rounded-sm border px-3 text-sm font-medium",
               box.id === inst.id ? "border-primary bg-card" : "border-border hover:bg-muted",
             )}
           >
@@ -179,7 +178,7 @@ function TunnelsPage() {
         ))}
       </div>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-medium">{inst.name}</h2>

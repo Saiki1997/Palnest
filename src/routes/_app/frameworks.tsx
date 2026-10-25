@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -111,7 +111,7 @@ function FrameworksPage() {
         title="Frameworks"
         description="UE4SS, Pal Schema, ReShade, and OptiScaler. Missing-side banners only appear when this den is client+server."
       />
-      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-5 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {tabs
           .filter((t) => !t.hide)
           .map((t) => (
@@ -120,8 +120,8 @@ function FrameworksPage() {
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "h-9 rounded-sm px-3 text-sm font-medium",
-                tab === t.id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+                "h-8 rounded-md px-3 text-[13px] font-medium",
+                tab === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
               <span className={cn("mr-2 inline-block size-1.5 rounded-full", liveDot(frameworks[t.id === "palschema" ? "palschema" : t.id], mode))} />
@@ -240,7 +240,7 @@ function Ue4ssPanel({
       </div>
       <div className={cn("grid gap-4", showClient && showServer ? "lg:grid-cols-2" : "")}>
         {showClient ? (
-          <article className="rounded-xl border border-border bg-card p-5">
+          <article className="panel p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className={cn("size-2 rounded-full", ue.clientVersion ? "bg-ok" : "bg-muted-foreground/50")} />
               <h2 className="font-medium">{ue.clientVersion ? "UE4SS is installed" : "UE4SS is not on the client"}</h2>
@@ -279,7 +279,7 @@ function Ue4ssPanel({
           </article>
         ) : null}
         {showServer ? (
-          <article className="rounded-xl border border-border bg-card p-5">
+          <article className="panel p-4">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className={cn("size-2 rounded-full", ue.serverVersion ? "bg-ok" : "bg-muted-foreground/50")} />
               <h2 className="font-medium">{ue.serverVersion ? "Server UE4SS is installed" : "Server UE4SS is not installed"}</h2>
@@ -324,7 +324,7 @@ function ConsoleBlock({
 }) {
   return (
     <div className="mt-5 rounded-lg border border-border bg-background p-4">
-      <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">{title}</h3>
+      <h3 className="mb-3 eyebrow">{title}</h3>
       <ToggleRow
         label="Debug console window"
         hint="Opens a separate console alongside the game and prints UE4SS and Lua output into it."
@@ -392,7 +392,7 @@ function PalSchemaPanel({
   const ps = frameworks.palschema;
   return (
     <div className="grid gap-4">
-      <article className="rounded-xl border border-border bg-card p-5">
+      <article className="panel p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -433,8 +433,8 @@ function PalSchemaPanel({
         </div>
       </article>
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-xs font-medium tracking-widest text-muted-foreground uppercase">Schema mods · {schemaMods.length} schema mods</h3>
+        <article className="panel p-4">
+          <h3 className="eyebrow">Schema mods · {schemaMods.length} schema mods</h3>
           {schemaMods.length === 0 ? (
             <p className="mt-3 text-sm text-muted-foreground">
               No schema mods are installed through the app yet. Anything you install from Discover that ships Pal Schema files lands here rather than in the mods list.
@@ -450,8 +450,8 @@ function PalSchemaPanel({
             </ul>
           )}
         </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">Pal Schema config</h3>
+        <article className="panel p-4">
+          <h3 className="mb-3 eyebrow">Pal Schema config</h3>
           <p className="mb-3 text-sm text-muted-foreground">Read from PalSchema\config\config.json. Changes take effect the next time the game starts.</p>
           <label className="grid gap-2 text-sm">
             Language override
@@ -492,7 +492,7 @@ function ReshadePanel({
   const rs = frameworks.reshade;
   return (
     <div className="grid gap-4">
-      <article className="rounded-xl border border-border bg-card p-5">
+      <article className="panel p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -524,8 +524,8 @@ function ReshadePanel({
         </div>
       </article>
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">Presets ({next.reshadePresets.length})</h3>
+        <article className="panel p-4">
+          <h3 className="mb-3 eyebrow">Presets ({next.reshadePresets.length})</h3>
           <ul className="space-y-2">
             {next.reshadePresets.map((p) => (
               <li key={p.id} className="flex items-start gap-3 rounded-md border border-border bg-background px-3 py-2">
@@ -546,8 +546,8 @@ function ReshadePanel({
             ))}
           </ul>
         </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">Addons ({next.reshadeAddons.length})</h3>
+        <article className="panel p-4">
+          <h3 className="mb-3 eyebrow">Addons ({next.reshadeAddons.length})</h3>
           <ul className="space-y-3">
             {next.reshadeAddons.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3">
@@ -587,7 +587,7 @@ function OptiPanel({
   const os = frameworks.optiscaler;
   return (
     <div className="grid gap-4">
-      <article className="rounded-xl border border-border bg-card p-5">
+      <article className="panel p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -605,10 +605,10 @@ function OptiPanel({
         </div>
       </article>
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">Frame generation</h3>
+        <article className="panel p-4">
+          <h3 className="mb-1 eyebrow">Frame generation</h3>
           <p className="mb-3 text-sm text-muted-foreground">The technique that renders the generated frames.</p>
-          <p className="mb-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">Output</p>
+          <p className="mb-2 eyebrow">Output</p>
           {(
             [
               ["off", "Off", "No generated frames."],
@@ -625,7 +625,7 @@ function OptiPanel({
               </span>
             </label>
           ))}
-          <p className="mt-4 mb-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">Input</p>
+          <p className="mt-4 mb-2 eyebrow">Input</p>
           {(
             [
               ["off", "Off"],
@@ -642,8 +642,8 @@ function OptiPanel({
             </label>
           ))}
         </article>
-        <article className="rounded-xl border border-border bg-card p-5">
-          <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">Upscalers</h3>
+        <article className="panel p-4">
+          <h3 className="mb-3 eyebrow">Upscalers</h3>
           <label className="mb-4 grid gap-1 text-sm">
             DX12 upscaler
             <select
@@ -661,7 +661,7 @@ function OptiPanel({
           </label>
           <div className="mb-4">
             <p className="text-sm font-medium">Upgrade FSR 3.1 to FSR 4</p>
-            <div className="mt-2 inline-flex rounded-md bg-muted p-1">
+            <div className="mt-2 inline-flex rounded-lg bg-muted p-0.5">
               {(["auto", "on", "off"] as OptiFsrUpgrade[]).map((id) => (
                 <button
                   key={id}
@@ -716,8 +716,8 @@ function ProxyChain({ frameworks }: { frameworks: ReturnType<typeof useAppStore.
   ].filter(Boolean);
   if (!bits.length) return null;
   return (
-    <article className="rounded-xl border border-border bg-card p-5">
-      <h3 className="mb-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">Proxy DLL chain · {bits.length} components load through their own proxy dll. No collisions.</h3>
+    <article className="panel p-4">
+      <h3 className="mb-2 eyebrow">Proxy DLL chain · {bits.length} components load through their own proxy dll. No collisions.</h3>
       <ul className="space-y-1 font-mono text-sm text-muted-foreground">
         {bits.map((b) => (
           <li key={b}>{b}</li>

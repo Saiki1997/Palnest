@@ -255,16 +255,6 @@ function findUnpacked() {
   return null;
 }
 
-function latestFile(dir, pred) {
-  if (!fs.existsSync(dir)) return null;
-  const hits = fs
-    .readdirSync(dir)
-    .filter(pred)
-    .map((f) => path.join(dir, f));
-  hits.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-  return hits[0] || null;
-}
-
 function writeManifest(setupName, zipName) {
   const payload = {
     version,
