@@ -5,6 +5,9 @@
  *   2. electron-builder → unpacked win32 app (zip/dir)
  *   3. Custom NSIS MUI2 wizard (.exe) — folder + shortcut options
  *   4. Flatten the portable zip (extract and run, no registry)
+ *
+ * Runs on Windows (NSIS from nsis.sourceforge.io or `winget install NSIS.NSIS`)
+ * and on Linux (system makensis, or a cached Debian build).
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -19,6 +22,7 @@ const distDir = path.join(root, "dist-desktop");
 const artifacts = path.join(root, "artifacts");
 const hostDir = path.join(root, "desktop-host");
 const vercelOut = path.join(root, ".vercel", "output");
+const isWindows = process.platform === "win32";
 const version = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version || "3.2.0";
 
 function run(cmd, args, env = {}, cwd = root) {
@@ -56,11 +60,24 @@ async function download(url, dest) {
 
 function which(bin) {
   const paths = (process.env.PATH || "").split(path.delimiter);
+  const names = isWindows ? [`${bin}.exe`, `${bin}.cmd`, bin] : [bin];
   for (const dir of paths) {
-    const full = path.join(dir, bin);
-    if (fs.existsSync(full)) return full;
+    for (const name of names) {
+      const full = path.join(dir, name);
+      if (fs.existsSync(full) && fs.statSync(full).isFile()) return full;
+    }
   }
   return null;
+}
+
+/** The Microsoft Store "python3" alias on Windows is a stub, so prefer `python` there. */
+function python() {
+  const order = isWindows ? ["python", "py", "python3"] : ["python3", "python"];
+  for (const name of order) {
+    const bin = which(name);
+    if (bin && !bin.includes("WindowsApps")) return bin;
+  }
+  throw new Error("Python 3 with Pillow is required to build the installer (python.org, then pip install pillow).");
 }
 
 function writePackagedReadme() {
@@ -123,25 +140,16 @@ function addPortableExtras(folder) {
   copyIfExists(path.join(root, "electron", "resources", "Launch Palnest.cmd"), path.join(folder, "Launch Palnest.cmd"));
 }
 
-async function flattenPortableZip(zipPath, destZip) {
+async function buildPortableZip(unpackedDir, destZip) {
   const { execFileSync } = await import("node:child_process");
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "palnest-zip-"));
-  const unpacked = path.join(tmp, "unpacked");
-  fs.mkdirSync(unpacked);
-  execFileSync("unzip", ["-q", zipPath, "-d", unpacked]);
-  const kids = fs.readdirSync(unpacked);
-  const inner =
-    kids.length === 1 && fs.statSync(path.join(unpacked, kids[0])).isDirectory()
-      ? path.join(unpacked, kids[0])
-      : unpacked;
-  addPortableExtras(inner);
   const stage = path.join(tmp, "Palnest");
-  fs.mkdirSync(stage);
-  fs.cpSync(inner, stage, { recursive: true });
+  fs.cpSync(unpackedDir, stage, { recursive: true });
+  addPortableExtras(stage);
   const outAbs = path.resolve(destZip);
   fs.mkdirSync(path.dirname(outAbs), { recursive: true });
   if (fs.existsSync(outAbs)) fs.unlinkSync(outAbs);
-  const zipBin = which("zip");
+  const zipBin = isWindows ? null : which("zip");
   if (zipBin) {
     execFileSync(zipBin, ["-r", "-q", "-9", outAbs, "Palnest"], { cwd: tmp });
   } else {
@@ -164,10 +172,22 @@ with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as z:
 `;
   const py = path.join(os.tmpdir(), "palnest-zip.py");
   fs.writeFileSync(py, script);
-  execFileSync("python3", [py, folder, destZip, prefix]);
+  execFileSync(python(), [py, folder, destZip, prefix]);
 }
 
-async function ensureNsisLinux() {
+async function ensureNsis() {
+  if (isWindows) {
+    const candidates = [
+      which("makensis"),
+      path.join(process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)", "NSIS", "makensis.exe"),
+      path.join(process.env.ProgramFiles || "C:\\Program Files", "NSIS", "makensis.exe"),
+    ];
+    const makensis = candidates.find((p) => p && fs.existsSync(p));
+    if (!makensis) throw new Error("NSIS 3 is required: winget install NSIS.NSIS (or nsis.sourceforge.io), then re-run.");
+    return { makensis, nsisdir: null };
+  }
+  const system = which("makensis");
+  if (system) return { makensis: system, nsisdir: null };
   const cached = path.join(root, ".cache", "nsis-308");
   const makensis = path.join(cached, "usr", "bin", "makensis");
   const nsisdir = path.join(cached, "usr", "share", "nsis");
@@ -204,11 +224,11 @@ async function ensureNsisLinux() {
 
 async function generateAssets() {
   const { execFileSync } = await import("node:child_process");
-  execFileSync("python3", [path.join(root, "scripts", "make-installer-assets.py")], { stdio: "inherit" });
+  execFileSync(python(), [path.join(root, "scripts", "make-installer-assets.py")], { stdio: "inherit" });
 }
 
 async function buildInstallerWizard(unpackedDir) {
-  const { makensis, nsisdir } = await ensureNsisLinux();
+  const { makensis, nsisdir } = await ensureNsis();
   await generateAssets();
   const ico = path.join(root, "electron", "resources", "icon.ico");
   const sidebar = path.join(root, "electron", "resources", "wizard", "sidebar.bmp");
@@ -224,16 +244,16 @@ async function buildInstallerWizard(unpackedDir) {
     [
       "-V2",
       `-DVERSION=${version}`,
-      `-DAPP_DIR=${unpackedDir.replace(/\\/g, "/")}`,
-      `-DOUT_FILE=${outExe.replace(/\\/g, "/")}`,
-      `-DICON=${ico.replace(/\\/g, "/")}`,
-      `-DLICENSE=${license.replace(/\\/g, "/")}`,
-      `-DREADME=${readme.replace(/\\/g, "/")}`,
-      `-DSIDEBAR_BMP=${sidebar.replace(/\\/g, "/")}`,
-      `-DHEADER_BMP=${header.replace(/\\/g, "/")}`,
+      `-DAPP_DIR=${unpackedDir}`,
+      `-DOUT_FILE=${outExe}`,
+      `-DICON=${ico}`,
+      `-DLICENSE=${license}`,
+      `-DREADME=${readme}`,
+      `-DSIDEBAR_BMP=${sidebar}`,
+      `-DHEADER_BMP=${header}`,
       nsi,
     ],
-    { NSISDIR: nsisdir },
+    nsisdir ? { NSISDIR: nsisdir } : {},
   );
   if (!fs.existsSync(outExe)) throw new Error("makensis did not emit the installer");
   return outExe;
@@ -288,7 +308,9 @@ if (skipPackager) {
 } else {
   console.log("[palnest-desktop] packaging Windows unpacked app…");
   try {
-    await run("npx", ["electron-builder", "--win", "dir", "--x64", "--config", "electron-builder.yml"], {
+    // Call the CLI through node: spawning `npx` fails on Windows without a shell.
+    const builderCli = path.join(root, "node_modules", "electron-builder", "cli.js");
+    await run(process.execPath, [builderCli, "--win", "dir", "--x64", "--config", "electron-builder.yml"], {
       CSC_IDENTITY_AUTO_DISCOVERY: "false",
       ELECTRON_BUILDER_BINARIES_MIRROR: process.env.ELECTRON_BUILDER_BINARIES_MIRROR || "",
     });
@@ -309,16 +331,13 @@ const palnestExe = ["Palnest.exe", "electron.exe"]
   .map((n) => path.join(unpacked, n))
   .find((p) => fs.existsSync(p));
 if (palnestExe) {
-  await run("node", [path.join(root, "scripts", "stamp-exe-version.mjs"), palnestExe, version]);
+  await run(process.execPath, [path.join(root, "scripts", "stamp-exe-version.mjs"), palnestExe, version]);
 }
 
 const setup = await buildInstallerWizard(unpacked);
 
-let zip = path.join(distDir, `Palnest-${version}-windows.zip`);
-const tmpZip = path.join(distDir, `_raw-${version}.zip`);
-await zipWithPython(unpacked, tmpZip, "Palnest");
-await flattenPortableZip(tmpZip, zip);
-fs.rmSync(tmpZip, { force: true });
+const zip = path.join(distDir, `Palnest-${version}-windows.zip`);
+await buildPortableZip(unpacked, zip);
 
 const setupDest = path.join(distDir, `Palnest-Setup-${version}.exe`);
 if (path.resolve(setup) !== path.resolve(setupDest)) copyIfExists(setup, setupDest);
