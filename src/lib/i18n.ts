@@ -4,7 +4,7 @@ const EN: Record<string, string> = {
   home: "Home",
   mods: "Mods",
   discover: "Discover",
-  frameworks: "Components",
+  frameworks: "Frameworks",
   server: "Server",
   tunnels: "Tunnels",
   worlds: "Worlds",

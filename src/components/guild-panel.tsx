@@ -68,7 +68,7 @@ export function GuildPanel() {
             const members = membersOf.get(g.id) ?? [];
             const outsiders = players.filter((p) => p.guild !== g.name);
             return (
-              <article key={g.id} className="rounded-xl border border-border bg-card p-4">
+              <article key={g.id} className="panel p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-medium">{g.name}</h2>

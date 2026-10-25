@@ -39,13 +39,13 @@ function StatusPage() {
         </header>
 
         {!onboarded ? (
-          <section className="rounded-xl border border-border bg-card p-8">
+          <section className="panel p-6">
             <h1 className="text-2xl font-semibold">No world published</h1>
             <p className="mt-2 text-sm text-muted-foreground">Open Palnest, finish setup, then share this page with players.</p>
           </section>
         ) : (
           <>
-            <section className="mb-6 rounded-xl border border-border bg-card p-6">
+            <section className="mb-6 panel p-5">
               <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Public status</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{server.name}</h1>
               <p className="mt-2 text-sm text-muted-foreground">{server.description || "A Palworld 1.0 world."}</p>
@@ -73,7 +73,7 @@ function StatusPage() {
 
             <JoinCard server={server} showStatusLink={false} />
 
-            <section className="mt-6 rounded-xl border border-border bg-card p-5">
+            <section className="mt-6 panel p-4">
               <h2 className="font-medium">Who is on the island</h2>
               {online.length === 0 ? (
                 <p className="mt-3 text-sm text-muted-foreground">Nobody connected right now.</p>

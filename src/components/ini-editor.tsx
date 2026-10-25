@@ -90,7 +90,7 @@ export function IniEditorPanel({ compact }: { compact?: boolean }) {
 
       <div className={cn("grid gap-4", compact ? "" : "lg:grid-cols-[200px_1fr]")}>
         {compact ? null : (
-          <nav className="rounded-xl border border-border bg-card p-2 h-fit">
+          <nav className="panel p-2 h-fit">
             <button
               type="button"
               onClick={() => setGroup("all")}
@@ -124,7 +124,7 @@ export function IniEditorPanel({ compact }: { compact?: boolean }) {
           ) : (
             groups.map(([name, rows]) => (
               <section key={name} className="mb-6 last:mb-0">
-                <h3 className="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">{name}</h3>
+                <h3 className="mb-3 eyebrow">{name}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   {rows.map((s) => (
                     <IniField key={s.key} setting={s} showKey={showKeys} onChange={change} />

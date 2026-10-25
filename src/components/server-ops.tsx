@@ -72,7 +72,7 @@ export function ServerOpsPanel() {
 
   return (
     <div className="grid gap-4">
-      <article className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+      <article className="flex flex-col gap-3 panel p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-medium">{server.running ? `${server.name} is running.` : "Server is stopped."}</p>
           <p className="text-sm text-muted-foreground">
@@ -111,7 +111,7 @@ export function ServerOpsPanel() {
       </article>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h2 className="font-medium">Scheduled restarts</h2>
@@ -188,7 +188,7 @@ export function ServerOpsPanel() {
               {times.length ? <p className="mt-2 text-sm text-muted-foreground">Daily at {times.join(", ")}.</p> : null}
             </>
           )}
-          <p className="mt-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">Countdown warnings</p>
+          <p className="mt-4 eyebrow">Countdown warnings</p>
           <p className="mt-1 text-sm text-muted-foreground">Warns 3 times · 30s → 5s, then restarts.</p>
           <Button
             className="mt-4"
@@ -203,7 +203,7 @@ export function ServerOpsPanel() {
           </Button>
         </article>
 
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <div className="mb-3 flex items-start justify-between gap-3">
             <h2 className="font-medium">Crash watchdog</h2>
             <div className="flex items-center gap-2">
@@ -220,7 +220,7 @@ export function ServerOpsPanel() {
         </article>
       </div>
 
-      <article className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
+      <article className="flex flex-col gap-3 panel p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="font-medium">Connection check</h2>
           <p className="mt-1 text-sm text-muted-foreground">

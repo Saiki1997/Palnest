@@ -111,31 +111,25 @@ function ModsPage() {
         }
       />
 
-      <div className="mb-5 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-5 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         <button
           type="button"
           onClick={() => setPageTab("installed")}
-          className={cn("h-9 rounded-sm px-3 text-sm font-medium", pageTab === "installed" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground")}
+          className={cn("h-8 rounded-md px-3 text-[13px] font-medium", pageTab === "installed" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
         >
           Installed
         </button>
-        <Link
-          to="/discover"
-          className="inline-flex h-9 items-center rounded-sm px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
-        >
-          Discover
-        </Link>
         <button
           type="button"
           onClick={() => setPageTab("history")}
-          className={cn("h-9 rounded-sm px-3 text-sm font-medium", pageTab === "history" ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground")}
+          className={cn("h-8 rounded-md px-3 text-[13px] font-medium", pageTab === "history" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
         >
           History
         </button>
       </div>
 
       {pageTab === "history" ? (
-        <section className="rounded-xl border border-border bg-card p-5">
+        <section className="panel p-4">
           <h2 className="mb-3 font-medium">Install history</h2>
           {fx.history.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nothing installed yet this session.</p>
@@ -159,7 +153,7 @@ function ModsPage() {
 
       {pageTab === "installed" ? (
         <>
-      <div className="mb-4 rounded-xl border border-border bg-card p-4">
+      <div className="mb-4 panel p-4">
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => {
@@ -244,7 +238,7 @@ function ModsPage() {
         </div>
       ) : null}
       <section className="mb-6 grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <h2 className="font-medium">Loadouts</h2>
           <p className="mt-1 mb-3 text-sm text-muted-foreground">Save enabled mods as PvE, creative, or event and swap without reinstalling.</p>
           <div className="mb-3 flex gap-2">
@@ -287,7 +281,7 @@ function ModsPage() {
             {(profiles ?? []).length === 0 ? <p className="text-sm text-muted-foreground">No loadouts yet.</p> : null}
           </ul>
         </article>
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <h2 className="font-medium">Conflict map</h2>
           <p className="mt-1 mb-3 text-sm text-muted-foreground">Same PAK name, overlapping PalSchema rows, or a broken pack left on.</p>
           {conflicts.length === 0 ? (
@@ -306,7 +300,7 @@ function ModsPage() {
       </section>
 
       <section className="mb-6 grid gap-4 lg:grid-cols-2">
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <h2 className="font-medium">Install a zip</h2>
           <p className="mt-1 mb-3 text-sm text-muted-foreground">
             Nexus / CurseForge / GitHub archives extract into UE4SS Mods, PalSchema, or Paks/~mods on Palnest.exe.
@@ -345,7 +339,7 @@ function ModsPage() {
             }}
           />
         </article>
-        <article className="rounded-xl border border-border bg-card p-5">
+        <article className="panel p-4">
           <h2 className="font-medium">Steam Workshop</h2>
           <p className="mt-1 mb-3 text-sm text-muted-foreground">steamcmd +workshop_download_item 1623730. Needs a PalServer folder.</p>
           <div className="flex gap-2">
@@ -371,15 +365,15 @@ function ModsPage() {
       </section>
 
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-        <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
+        <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
           {KINDS.map((k) => (
             <button
               key={k.id}
               type="button"
               onClick={() => setKind(k.id)}
               className={cn(
-                "h-9 rounded-sm px-3 text-sm font-medium",
-                kind === k.id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+                "h-8 rounded-md px-3 text-[13px] font-medium",
+                kind === k.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
               {k.label}
@@ -387,15 +381,15 @@ function ModsPage() {
           ))}
         </div>
         {mode === "both" ? (
-          <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
+          <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
             {(["all", "client", "server", "both"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setTarget(t)}
                 className={cn(
-                  "h-9 rounded-sm px-3 text-sm font-medium capitalize",
-                  target === t ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+                  "h-8 rounded-md px-3 text-[13px] font-medium capitalize",
+                  target === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {t}
@@ -409,13 +403,13 @@ function ModsPage() {
           placeholder="Filter by name"
           className="lg:ml-auto lg:max-w-xs"
         />
-        <div className="flex gap-1 rounded-md bg-muted p-1">
+        <div className="flex gap-0.5 rounded-lg bg-muted p-0.5">
           {(["list", "grid", "compact"] as const).map((v) => (
             <button
               key={v}
               type="button"
               onClick={() => setView(v)}
-              className={cn("h-9 rounded-sm px-3 text-sm capitalize", view === v ? "bg-card text-foreground" : "text-muted-foreground")}
+              className={cn("h-8 rounded-md px-3 text-[13px] font-medium capitalize", view === v ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               {v}
             </button>
@@ -460,7 +454,7 @@ function ModsPage() {
       {view === "grid" ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
           {filtered.map((m) => (
-            <article key={m.id} className="overflow-hidden rounded-xl border border-border bg-card">
+            <article key={m.id} className="overflow-hidden panel">
               <img src={m.image || "/palworld-cover.jpg"} alt="" className="aspect-[16/10] w-full object-cover" />
               <div className="p-3">
                 <p className="line-clamp-2 font-medium">{m.name}</p>
@@ -479,7 +473,7 @@ function ModsPage() {
           ))}
         </div>
       ) : (
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="overflow-hidden panel">
         {filtered.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="font-medium">No mods in this shelf</p>
@@ -755,15 +749,15 @@ function ScanInstallButton() {
         </DialogHeader>
         <div className="grid gap-3">
           {mode === "both" ? (
-            <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1">
+            <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
               {(["client", "server"] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => pickSide(t)}
                   className={cn(
-                    "h-9 rounded-sm px-3 text-sm font-medium capitalize",
-                    side === t ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+                    "h-8 rounded-md px-3 text-[13px] font-medium capitalize",
+                    side === t ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {t}

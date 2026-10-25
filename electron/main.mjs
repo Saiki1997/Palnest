@@ -9,7 +9,7 @@ import { registerHost, shouldCloseToTray, stopAllHost, killProcessTree } from ".
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEV_URL = process.env.PALNEST_DEV_URL || "http://127.0.0.1:8080";
-const BACKGROUND = "#0c1110";
+const BACKGROUND = "#0b0d10";
 
 app.setName("Palnest");
 app.setAppUserModelId("com.palnest.app");

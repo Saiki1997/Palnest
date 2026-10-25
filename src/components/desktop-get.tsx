@@ -17,7 +17,7 @@ import { APP_LINE, APP_VERSION } from "@/lib/version";
 export function DesktopGet({ compact }: { compact?: boolean }) {
   if (isDesktopApp()) {
     return (
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <div className="flex items-start gap-3">
           <MonitorSmartphone className="mt-0.5 size-5 text-primary" />
           <div>
@@ -32,7 +32,7 @@ export function DesktopGet({ compact }: { compact?: boolean }) {
   }
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5">
+    <section className="panel p-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-xl">
           <div className="mb-1 flex items-center gap-2">

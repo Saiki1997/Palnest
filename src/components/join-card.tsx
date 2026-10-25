@@ -32,7 +32,7 @@ export function JoinCard({
   const connect = `-connect=${ip}`;
 
   return (
-    <section className={cn("rounded-xl border border-border bg-card p-5", compact && "p-4")}>
+    <section className={cn("panel p-4", compact && "p-4")}>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="font-medium">Join {server.name}</h2>

@@ -195,7 +195,7 @@ function DiscoverPage() {
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {SOURCES.map((s) => (
           <button
             key={s.id}
@@ -208,8 +208,8 @@ function DiscoverPage() {
               setExcludeTag("");
             }}
             className={cn(
-              "h-9 rounded-sm px-3 text-sm font-medium",
-              source === s.id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-[13px] font-medium",
+              source === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {s.label}
@@ -221,7 +221,7 @@ function DiscoverPage() {
         <img src="/palworld-cover.jpg" alt="" className="h-44 w-full object-cover sm:h-56" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/40 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-5">
-          <p className="text-xs font-medium tracking-widest text-muted-foreground uppercase">Palworld mods</p>
+          <p className="eyebrow">Palworld mods</p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Discover</h1>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
             {live ? "Live from the stores with your API keys." : note || "Cached catalog until a store answers."}
@@ -272,8 +272,8 @@ function DiscoverPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-        <aside className="rounded-xl border border-border bg-card p-3 h-fit">
-          <p className="mb-2 px-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">Categories</p>
+        <aside className="panel p-3 h-fit">
+          <p className="mb-2 px-2 eyebrow">Categories</p>
           <button
             type="button"
             onClick={() => setCats([])}

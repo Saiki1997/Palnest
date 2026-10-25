@@ -4,24 +4,24 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm text-sm font-medium transition-[opacity,transform,background-color,color,box-shadow] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4 [&_svg]:shrink-0 active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-[13px] font-medium transition-[background-color,color,border-color,box-shadow] duration-120 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:opacity-90",
-        secondary: "bg-muted text-foreground hover:bg-card",
-        outline: "border border-border bg-transparent text-foreground hover:bg-muted",
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/88",
+        secondary: "bg-muted text-foreground hover:bg-muted/70",
+        outline: "border border-border bg-card text-foreground hover:bg-muted",
         ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
-        danger: "bg-danger text-danger-foreground hover:opacity-90",
-        ok: "bg-ok text-background hover:opacity-90",
+        danger: "bg-danger text-danger-foreground hover:bg-danger/88",
+        ok: "bg-ok text-white hover:bg-ok/88",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-11 px-4",
-        sm: "h-9 px-3 text-sm",
-        lg: "h-12 px-5",
-        icon: "size-11",
-        "icon-sm": "size-9",
+        default: "h-9 px-3.5",
+        sm: "h-8 px-2.5 text-xs [&_svg]:size-3.5",
+        lg: "h-10 px-4 text-sm",
+        icon: "size-9",
+        "icon-sm": "size-8",
       },
     },
     defaultVariants: {

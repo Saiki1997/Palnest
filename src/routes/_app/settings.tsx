@@ -70,7 +70,7 @@ function SettingsPage() {
         <DesktopGet />
       </div>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Mode</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Switch any time. Server-only worlds do not need a game folder. Client-only worlds hide dedicated pages.
@@ -96,7 +96,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Paths</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Browse the Palworld or PalServer folder. Palnest lists UE4SS, PalSchema, and PAK mods already installed and
@@ -159,7 +159,7 @@ function SettingsPage() {
         </Button>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Store APIs</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Keys stay in this browser and are sent only to the store you asked Palnest to query. With a key, Discover loads live catalogs, descriptions, and the file list so you can pick which archive to install.
@@ -217,7 +217,7 @@ function SettingsPage() {
         <SaveBar dirty={Boolean(keysDraft)} onSave={saveKeys} onDiscard={() => setKeysDraft(null)} hint="API keys stay in this browser until you save." />
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="mb-4 font-medium">Behaviour</h2>
         <ul className="space-y-4">
           <Toggle
@@ -248,7 +248,7 @@ function SettingsPage() {
       </section>
 
       {mode !== "client" ? (
-        <section className="mb-6 rounded-xl border border-border bg-card p-5">
+        <section className="mb-6 panel p-4">
           <h2 className="font-medium">Monitor thresholds</h2>
           <p className="mt-1 mb-4 text-sm text-muted-foreground">
             Sustained alerts on the dashboard. A spike that recovers inside the sustain window is ignored.
@@ -303,7 +303,7 @@ function SettingsPage() {
         </section>
       ) : null}
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Language</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">Chrome labels. World names stay as you typed them.</p>
         <div className="flex flex-wrap gap-2">
@@ -313,7 +313,7 @@ function SettingsPage() {
               type="button"
               onClick={() => setOps({ locale: loc.id as Locale })}
               className={cn(
-                "h-11 rounded-sm border px-4 text-sm",
+                "h-9 rounded-sm border px-4 text-sm",
                 (ops?.locale ?? "en") === loc.id ? "border-primary bg-background" : "border-border hover:bg-muted",
               )}
             >
@@ -323,7 +323,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="mb-4 font-medium">Host</h2>
         <ul className="space-y-4">
           <Toggle
@@ -415,7 +415,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">Schedule</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Daily restart broadcasts first on a live box. Snapshots zip Pal\Saved and keep the newest copies. Both jobs have an on/off switch.
@@ -462,7 +462,7 @@ function SettingsPage() {
                   type="button"
                   onClick={() => setOps({ scheduleBackupMinutes: row.minutes, scheduleBackupHours: Math.round(row.minutes / 60) })}
                   className={cn(
-                    "h-11 rounded-sm border px-3 text-sm",
+                    "h-9 rounded-sm border px-3 text-sm",
                     (ops?.scheduleBackupMinutes ?? 360) === row.minutes
                       ? "border-primary bg-background"
                       : "border-border hover:bg-muted",
@@ -488,7 +488,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section className="mb-6 rounded-xl border border-border bg-card p-5">
+      <section className="mb-6 panel p-4">
         <h2 className="font-medium">UE4SS channel</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">Stable is 2281fa31 for Palworld 1.0. Experimental includes GitHub prereleases.</p>
         <div className="flex flex-wrap gap-2">
@@ -498,7 +498,7 @@ function SettingsPage() {
               type="button"
               onClick={() => setOps({ ue4ssChannel: ch })}
               className={cn(
-                "h-11 rounded-sm border px-4 text-sm capitalize",
+                "h-9 rounded-sm border px-4 text-sm capitalize",
                 (ops?.ue4ssChannel ?? "stable") === ch ? "border-primary bg-background" : "border-border hover:bg-muted",
               )}
             >
@@ -508,7 +508,7 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-card p-5">
+      <section className="panel p-4">
         <h2 className="font-medium">World data</h2>
         <p className="mt-1 mb-4 text-sm text-muted-foreground">
           Stored in this browser. Export a Palnest.json to move worlds between PCs. Reset returns you to first-run setup.

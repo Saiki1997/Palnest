@@ -139,7 +139,7 @@ export function SetupPage() {
             title="Install paths"
             body="Leave blank to add later. Browse a folder to detect UE4SS, PalSchema, and PAK mods already installed."
           >
-            <div className="grid gap-4 rounded-xl border border-border bg-card p-5">
+            <div className="grid gap-4 panel p-4">
               {needsClient ? (
                 <FolderScan
                   id="client-path"
@@ -197,7 +197,7 @@ export function SetupPage() {
               title="Import an existing server"
               body="Point at a PalServer folder you already run. Browse the folder above to detect mods; paste PalWorldSettings.ini only if it was not found."
             >
-              <div className="grid gap-4 rounded-xl border border-border bg-card p-5">
+              <div className="grid gap-4 panel p-4">
                 <div className="grid gap-2">
                   <Label htmlFor="world-name">World name</Label>
                   <Input
@@ -226,7 +226,7 @@ export function SetupPage() {
             title="After you enter the world"
             body="The same list stays on Home until you finish or hide it."
           >
-            <div className="rounded-xl border border-border bg-card p-5">
+            <div className="panel p-4">
               <UpcomingSteps mode={mode} />
             </div>
           </SetupStep>

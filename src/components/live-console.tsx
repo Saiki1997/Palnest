@@ -26,7 +26,7 @@ export function LiveConsole({
   }, [rows, q, compact]);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
+    <section className="overflow-hidden panel">
       <div className="flex flex-col gap-2 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-medium">Live console</h2>

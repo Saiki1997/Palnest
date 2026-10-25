@@ -14,6 +14,7 @@ import {
   simulatedListenProbe,
 } from "@/lib/listen";
 import { appendSample, liveSample } from "@/lib/monitor";
+import { clearProcStats, recordProcStats } from "@/lib/live-stats";
 import { blameCrash } from "@/lib/crash-blame";
 import { composeEngineIni, mergeFx } from "@/lib/fx";
 import { tweaksToIni } from "@/lib/args";
@@ -236,6 +237,7 @@ export function RuntimeBridge() {
         })();
       }
       if (!inst.running && prev.has(inst.id)) {
+        clearProcStats(inst.id);
         void stopDenProcess(inst.id);
         patchServer(inst.id, { pid: null });
         if (ops?.upnp) void mapUpnp(inst.port, false);
@@ -564,7 +566,11 @@ export function RuntimeBridge() {
             if (live.ok && !live.simulated && live.players.length) {
               patchServer(inst.id, { players: live.players });
             }
-            if (!m.running) return;
+            if (!m.running) {
+              clearProcStats(inst.id);
+              return;
+            }
+            recordProcStats(inst.id, { cpu: m.cpu, ramMb: m.ramMb });
             useAppStore.setState((st) => {
               const samples = st.monitor?.samples ?? [];
               const world = st.worlds.find((w) => w.id === inst.worldId) ?? st.worlds.find((w) => w.active);

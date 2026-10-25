@@ -97,15 +97,15 @@ function LogsPage() {
           </Button>
         }
       />
-      <div className="mb-4 flex flex-wrap gap-1 rounded-md bg-muted p-1">
+      <div className="mb-4 inline-flex max-w-full flex-wrap gap-0.5 rounded-lg bg-muted p-0.5">
         {visibleSources.map((s) => (
           <button
             key={s.id}
             type="button"
             onClick={() => setSource(s.id)}
             className={cn(
-              "h-9 rounded-sm px-3 text-sm font-medium",
-              source === s.id ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-[13px] font-medium",
+              source === s.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
             )}
           >
             {s.label}
@@ -160,7 +160,7 @@ function LogsPage() {
           <Badge variant="outline">Info {infos}</Badge>
         </span>
       </p>
-      <div ref={scroller} className="max-h-[640px] overflow-auto rounded-xl border border-border bg-card">
+      <div ref={scroller} className="max-h-[640px] overflow-auto panel">
         {filtered.length === 0 ? (
           <p className="px-5 py-12 text-center text-sm text-muted-foreground">
             {source === "client-ue4ss" || source === "server-ue4ss" || source === "pal"

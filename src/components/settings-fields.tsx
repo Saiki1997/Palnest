@@ -69,7 +69,7 @@ function SettingField({
         </span>
       ) : s.type === "enum" ? (
         <select
-          className="mt-2 h-11 w-full rounded-sm border border-border bg-background px-2 text-sm"
+          className="mt-2 h-9 w-full rounded-sm border border-border bg-background px-2 text-sm"
           value={s.value}
           onChange={(e) => onChange(s.key, e.target.value)}
         >
