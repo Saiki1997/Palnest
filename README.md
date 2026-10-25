@@ -4,9 +4,20 @@
 
 [Download latest release](https://github.com/Saiki1997/Palnest/releases/latest)
 
-![Dashboard](docs/dashboard.png)
+![Overview](docs/dashboard.png)
 
-Palnest runs PalServer from the dashboard, edits `PalWorldSettings.ini` / `WorldOption.sav` / `Engine.ini`, installs mods from Nexus, Steam Workshop, and CurseForge, and manages UE4SS, PalSchema, OptiScaler, and ReShade. Changes stay draft until you press **Save**.
+Palnest runs PalServer from the Overview, edits `PalWorldSettings.ini` / `WorldOption.sav` / `Engine.ini`, installs mods from Nexus, Steam Workshop, and CurseForge, and manages UE4SS, PalSchema, OptiScaler, and ReShade. Changes stay draft until you press **Save**.
+
+## What's new in 3.2.0
+
+- **New interface.** Graphite dark theme plus a light theme that follows Windows (switch it at the bottom of the sidebar). Grouped sidebar with each server's status and port, and Start / Stop for the selected server in the top bar on every page.
+- **Real data only.** The Overview, console, and logs show only what Palnest measures: real server CPU %, your PC's actual RAM, disk free, and tunnel addresses read from the playit / PortWarp agent. No sample lines or placeholder numbers.
+- **Fixes.** Links in mod descriptions open in your browser, changes made right before closing are saved, and Palnest uses less CPU while a server runs.
+- **Smaller.** About 13,000 lines of unused code and 25 unused packages removed.
+
+Full notes: [Releases](https://github.com/Saiki1997/Palnest/releases/latest).
+
+![Light theme](docs/dashboard-light.png)
 
 ---
 
@@ -48,23 +59,24 @@ Extract the `Palnest` folder and run `Palnest.exe` (or `Launch Palnest.cmd`). Ke
 
 1. Pick **Server only**, **Client only**, or **Client + server**.
 2. Browse to the Palworld game folder and/or PalServer folder. Empty is fine — you can set them later in Settings.
-3. **Enter the world**, or **Load sample world** to try Palnest with demo dens, players, and guilds.
+3. **Enter the world**, or **Load sample world** to try Palnest with demo servers, players, and guilds.
 
-Mode can be changed later in **Settings**. Client-only hides server tools (Server, Worlds, Tunnels). Server-only hides ReShade and OptiScaler.
+Sample worlds only exist to explore the app; real servers always show live numbers. Mode can be changed later in **Settings**. Client-only hides server tools (Server, Worlds, Tunnels). Server-only hides ReShade and OptiScaler.
 
 ---
 
 ## How to use
 
-### Dashboard
+### Overview
 
-![Dashboard node cards](docs/dashboard.png)
+![Overview](docs/dashboard.png)
 
-Each den is a node card: start, stop, restart, clone, delete, CPU / RAM, player count, and join info.
+The home page. The top row shows servers running, host CPU, memory, and free disk. Each server gets a card with its join address (one click to copy), players, uptime, ports, live CPU / RAM, and start, stop, restart, players, backups, clone, and delete.
 
-- **Start all / Stop all** for the fleet
+- **New server** and **Import server** (bring an existing PalServer world along, nothing is copied or moved)
+- **Start all / Stop all** for the fleet, plus a **Firewall** helper
 - **Check for updates** compares your PalServer build to the latest Steam dedicated build. **Update** runs SteamCMD
-- Clone copies the den (new id). Delete asks you to type the name first
+- Clone copies the server (new id). Delete asks you to type the name first
 
 ---
 
@@ -72,7 +84,7 @@ Each den is a node card: start, stop, restart, clone, delete, CPU / RAM, player 
 
 ![Server ops](docs/server-ops.png)
 
-Scheduled restart (hourly / daily clock), crash watchdog (auto-restart with a cap), start / stop / restart this den.
+Scheduled restart (hourly / daily clock), crash watchdog (auto-restart with a cap), start / stop / restart this server.
 
 ---
 
@@ -103,7 +115,7 @@ Same editor lives under **Worlds → INI**.
 
 ![Guilds](docs/server-guilds.png)
 
-Delete a guild, add a member (player id), remove a member. Save writes the den files.
+Delete a guild, add a member (player id), remove a member. Save writes the server files.
 
 ---
 
@@ -111,7 +123,7 @@ Delete a guild, add a member (player id), remove a member. Save writes the den f
 
 ![Instance](docs/server-instance.png)
 
-Name, ports, community flag, public IP, RCON port, install path, launch args for this den only.
+Name, ports, community flag, public IP, RCON port, install path, launch args for this server only.
 
 ---
 
@@ -123,7 +135,7 @@ Tabs for PalServer, Palnest, RCON, REST, and crash. Search, copy, export. Consol
 
 ---
 
-### Optimize / Engine.ini
+### Engine tweaks (`Engine.ini`)
 
 ![Engine.ini tweaks](docs/optimize.png)
 
@@ -179,7 +191,7 @@ Missing-side banners (**server missing** / **client missing**) only show in **cl
 
 ![Worlds](docs/worlds.png)
 
-List dens, clone, delete (type the name), open folder.
+List worlds, clone, delete (type the name), open folder.
 
 ![Backups](docs/worlds-backups.png)
 
@@ -195,7 +207,7 @@ Inspect `WorldOption.sav` / `Level.sav`, export JSON, write a patched sav.
 
 ![Tunnels](docs/tunnels.png)
 
-Palnest looks for **playit.gg** and **PortWarp** on disk. If the agent is missing, **Download** is shown. Start / stop from here. Join host is copied to the dashboard.
+Palnest looks for **playit.gg** and **PortWarp** on disk. If the agent is missing, **Download** is shown. Start / stop from here. The join host from the agent appears on the server's card in the Overview.
 
 ---
 
@@ -203,7 +215,7 @@ Palnest looks for **playit.gg** and **PortWarp** on disk. If the agent is missin
 
 ![Settings](docs/settings.png)
 
-Mode, install paths, locale, capture console, Discord webhook, API keys (Nexus, CurseForge, GitHub PAT). **Export Palnest.json** / **Import Palnest.json** moves dens, mods, and keys between PCs.
+Mode, theme, install paths, locale, capture console, Discord webhook, API keys (Nexus, CurseForge, GitHub PAT). **Export Palnest.json** / **Import Palnest.json** moves servers, mods, and keys between PCs.
 
 ---
 
@@ -219,11 +231,11 @@ UE4SS vs PalSchema vs PAK mismatches, missing frameworks, version notes. Warning
 
 1. Install Palnest and PalServer (and Palworld if you play on the same box)
 2. Pick **Client + server**, set both folders
-3. Create a den on the dashboard (or import an existing PalServer world)
+3. Create a server on the Overview (or import an existing PalServer world)
 4. Set ports, community, RCON password → **Save**
 5. Install UE4SS, then PalSchema if you need JSON mods
 6. Discover a pack → Files → install
-7. Start the den. Copy the join IP / tunnel host
+7. Start the server. Copy the join IP / tunnel host
 8. MOTD + RCON on Players. Backups on Worlds
 
 ---
