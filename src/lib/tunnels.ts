@@ -62,7 +62,7 @@ export function slugHost(name: string) {
   return slug || "palnest";
 }
 
-function playitEndpoint(name: string, slot: number, localPort: number): { game: TunnelEndpoint; query: TunnelEndpoint } {
+function playitEndpoint(name: string, slot: number): { game: TunnelEndpoint; query: TunnelEndpoint } {
   const slug = slugHost(name);
   const publicPort = 30051 + slot * 17;
   const ip = `147.185.221.${40 + (slot % 200)}`;
@@ -87,7 +87,7 @@ function portwarpEndpoint(name: string, slot: number, localPort: number, queryPo
 }
 
 export function allocateTunnel(instance: Pick<ServerState, "name" | "slot" | "port" | "queryPort">, provider: TunnelProvider) {
-  if (provider === "playit") return playitEndpoint(instance.name, instance.slot, instance.port);
+  if (provider === "playit") return playitEndpoint(instance.name, instance.slot);
   if (provider === "portwarp") return portwarpEndpoint(instance.name, instance.slot, instance.port, instance.queryPort);
   return { game: null as TunnelEndpoint | null, query: null as TunnelEndpoint | null };
 }

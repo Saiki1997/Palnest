@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { FileDrop } from "@/components/file-drop";
 import { ImportServerDialog } from "@/components/import-server-dialog";
@@ -10,9 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { downloadBytes, downloadText, readFileBytes, readFileText, saveBytes, saveText } from "@/lib/download";
 import { editedCount, isEdited, parseOptionSettings } from "@/lib/ini";
 import {
@@ -195,7 +193,6 @@ function WorldFileBar() {
 
 function WorldList() {
   const worlds = useAppStore((s) => s.worlds);
-  const backups = useAppStore((s) => s.backups);
   const worldSaves = useAppStore((s) => s.worldSaves);
   const instances = useAppStore((s) => s.instances);
   const server = useAppStore((s) => s.server);
@@ -204,8 +201,6 @@ function WorldList() {
   const deleteWorld = useAppStore((s) => s.deleteWorld);
   const createWorld = useAppStore((s) => s.createWorld);
   const createBackup = useAppStore((s) => s.createBackup);
-  const restoreBackup = useAppStore((s) => s.restoreBackup);
-  const autoBackup = useAppStore((s) => s.autoBackup);
   const patchWorld = useAppStore((s) => s.patchWorld);
   const applyProfileById = useAppStore((s) => s.applyProfileById);
   const profiles = useAppStore((s) => s.profiles);

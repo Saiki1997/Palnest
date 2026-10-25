@@ -17,9 +17,9 @@ export function LiveConsole({
   const captureConsole = useAppStore((s) => s.captureConsole);
   const [q, setQ] = useState("");
   const id = serverId || activeId;
-  const rows = consoleLines?.[id] ?? [];
+  const rows = consoleLines?.[id];
   const filtered = useMemo(() => {
-    const list = [...rows].slice(compact ? -8 : 0);
+    const list = (rows ?? []).slice(compact ? -8 : 0);
     if (!q.trim()) return list;
     const s = q.toLowerCase();
     return list.filter((l) => l.text.toLowerCase().includes(s));

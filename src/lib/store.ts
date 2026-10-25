@@ -46,7 +46,6 @@ import {
   snapshotProfile,
   tickConsoleLine,
   type BanEntry,
-  type ModProfile,
   type OpsState,
 } from "./ops";
 import { mergeFx, pushHistory, type ClientFx, type EngineBlock } from "./fx";

@@ -93,7 +93,6 @@ function TunnelsPage() {
       void hostDetectAgents().then((hit) => applyScan(hit, false));
     }, 8000);
     return () => window.clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missingAgents]);
 
   if (mode === "client") return <Navigate to="/" />;

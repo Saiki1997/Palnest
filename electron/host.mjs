@@ -593,7 +593,7 @@ function rconExec(port, password, command) {
   });
 }
 
-export function registerHost(ipcMain, { getWindow, app, Tray, Menu, nativeImage, shell }) {
+export function registerHost(ipcMain, { getWindow, app, Tray, Menu, nativeImage }) {
   ipcMain.handle("palnest:detect-steam", () => detectSteam());
   ipcMain.handle("palnest:detect-agents", () => detectAgents());
   ipcMain.handle("palnest:write-file", (_e, p, contents) => writeFile(p, contents));

@@ -207,10 +207,48 @@ function createWindow() {
   });
 }
 
+let appOrigin = null;
+
 async function loadApp(url) {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  appOrigin = new URL(url).origin;
   void mainWindow.loadURL(url);
 }
+
+function isAppUrl(target) {
+  try {
+    const u = new URL(target);
+    if (u.protocol === "file:") return u.pathname.endsWith("/splash.html");
+    return appOrigin != null && u.origin === appOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function openExternalSafe(target) {
+  try {
+    const u = new URL(target);
+    if (u.protocol === "https:" || u.protocol === "http:") void shell.openExternal(u.toString());
+  } catch {
+    // Not a URL; nothing to open.
+  }
+}
+
+// The preload bridge can write files and start processes, so only Palnest's own
+// pages may ever load in a Palnest window. Mod descriptions link to Nexus,
+// Steam and YouTube: those open in the user's browser instead.
+app.on("web-contents-created", (_event, contents) => {
+  contents.setWindowOpenHandler(({ url }) => {
+    openExternalSafe(url);
+    return { action: "deny" };
+  });
+  contents.on("will-navigate", (event, url) => {
+    if (isAppUrl(url)) return;
+    event.preventDefault();
+    openExternalSafe(url);
+  });
+  contents.on("will-attach-webview", (event) => event.preventDefault());
+});
 
 ipcMain.handle("palnest:pick-folder", async () => {
   const win = BrowserWindow.getFocusedWindow() ?? mainWindow;

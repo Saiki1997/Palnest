@@ -19,8 +19,8 @@ export function GuildPanel() {
 
   const world = worlds.find((w) => w.id === server.worldId) ?? worlds.find((w) => w.active);
   const save = world ? worldSaves[world.id] : undefined;
-  const players = save?.players ?? [];
-  const guilds = save?.guilds ?? [];
+  const players = useMemo(() => save?.players ?? [], [save]);
+  const guilds = useMemo(() => save?.guilds ?? [], [save]);
 
   const membersOf = useMemo(() => {
     const map = new Map<string, typeof players>();
