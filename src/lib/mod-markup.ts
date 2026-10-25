@@ -213,6 +213,7 @@ export function markupToHtml(raw: string) {
   s = autolink(s);
   s = stripLeftoverBbcode(s);
   s = toParagraphs(s);
+  // eslint-disable-next-line no-control-regex -- NUL-delimited placeholders for code blocks
   s = s.replace(/\u0000CODE(\d+)\u0000/g, (_m, i) => codes[Number(i)] || "");
   return s;
 }

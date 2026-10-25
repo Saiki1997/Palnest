@@ -1209,12 +1209,6 @@ export const useAppStore = create<Store>()(
             if (asNew) instances = [...fleet.instances, inst];
             else instances = fleet.instances.map((i) => (i.id === inst.id ? inst : i));
             server = inst;
-          } else if (asNew) {
-            const slot = nextSlot(fleet.instances);
-            const inst = makeFrom(fleet.server, slot);
-            id = inst.id;
-            instances = [...fleet.instances, inst];
-            server = inst;
           } else {
             const inst = makeFrom(fleet.server, fleet.server.slot);
             id = inst.id;

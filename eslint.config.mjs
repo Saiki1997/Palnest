@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-/** Flat ESLint config for the TanStack Start app-builder template. */
+/** Flat ESLint config for Palnest. */
 export default tseslint.config(
   {
     ignores: [
@@ -13,6 +13,8 @@ export default tseslint.config(
       ".output/**",
       ".vercel/**",
       ".nitro/**",
+      "desktop-host/**",
+      "dist-desktop/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
     ],
@@ -41,6 +43,10 @@ export default tseslint.config(
       ],
       "@typescript-eslint/no-explicit-any": "off",
     },
+  },
+  {
+    files: ["**/*.cjs"],
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
   // Disable rules that conflict with Prettier formatting.
   prettier,
