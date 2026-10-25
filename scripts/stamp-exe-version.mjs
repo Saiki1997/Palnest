@@ -4,9 +4,9 @@ import fs from "node:fs";
 import { NtExecutable, NtExecutableResource, Resource } from "resedit";
 
 const exePath = process.argv[2];
-const version = process.argv[3] || "3.1.0";
+const version = process.argv[3] || "3.2.0";
 if (!exePath || !fs.existsSync(exePath)) {
-  console.error("usage: stamp-exe-version.mjs <Palnest.exe> [3.1.0]");
+  console.error("usage: stamp-exe-version.mjs <Palnest.exe> [3.2.0]");
   process.exit(1);
 }
 
