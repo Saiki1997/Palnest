@@ -254,8 +254,10 @@ npm run dev            # http://127.0.0.1:8080
 npm run typecheck
 npm run lint
 npm test
-npm run build && npm run desktop:pack
+npm run desktop:pack   # builds the app, then the installer + portable zip into artifacts/
 ```
+
+`desktop:pack` works on Windows and Linux. It needs Python 3 with Pillow (`pip install pillow`) and NSIS 3 (`winget install NSIS.NSIS` on Windows; on Linux a system `makensis` is used, or one is downloaded). In Windows PowerShell, use `npm.cmd` if script execution is disabled.
 
 ---
 

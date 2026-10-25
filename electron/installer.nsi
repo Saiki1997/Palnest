@@ -28,7 +28,7 @@ Unicode true
   !error "Pass -DHEADER_BMP="
 !endif
 !ifndef README
-  !define README "${APP_DIR}/README.txt"
+  !define README "${APP_DIR}\README.txt"
 !endif
 
 Name "Palnest"
@@ -111,7 +111,7 @@ FunctionEnd
 Section "Palnest (required)" SecApp
   SectionIn RO 1 2
   SetOutPath "$INSTDIR"
-  File /r "${APP_DIR}/*.*"
+  File /r "${APP_DIR}\*.*"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   WriteRegStr HKCU "Software\Palnest" "InstallDir" "$INSTDIR"

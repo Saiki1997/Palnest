@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import struct
 from pathlib import Path
 
@@ -12,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "electron" / "resources"
 WIZ = RES / "wizard"
 ICON_PNG = RES / "icon.png"
+VERSION = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
 
 TEAL = (78, 201, 196)
 TEAL_DIM = (26, 61, 56)
@@ -21,10 +23,17 @@ INK = (215, 236, 232)
 MUTED = (138, 163, 173)
 
 
+FONT_CANDIDATES = {
+    False: [Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"), Path("C:/Windows/Fonts/segoeui.ttf")],
+    True: [Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"), Path("C:/Windows/Fonts/segoeuib.ttf")],
+}
+
+
 def font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-    path = Path("/usr/share/fonts/truetype/dejavu") / name
-    return ImageFont.truetype(str(path), size)
+    for path in FONT_CANDIDATES[bold]:
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+    return ImageFont.load_default(size)
 
 
 def lerp(a, b, t):
@@ -78,7 +87,7 @@ def sidebar() -> None:
     draw.text((18, 214), "Palworld Server", font=sub, fill=MUTED)
     draw.text((18, 230), "& Mod Manager", font=sub, fill=MUTED)
     draw.line((18, 258, 146, 258), fill=TEAL_DIM, width=1)
-    draw.text((18, 270), "Setup wizard  2.3.0", font=ver, fill=TEAL)
+    draw.text((18, 270), f"Setup wizard  {VERSION}", font=ver, fill=TEAL)
     draw.text((18, 290), "Choose folder + shortcuts", font=ver, fill=MUTED)
     save_bmp(im, WIZ / "sidebar.bmp")
 
@@ -91,7 +100,7 @@ def header() -> None:
     mark = Image.open(ICON_PNG).convert("RGBA").resize((32, 32), Image.Resampling.LANCZOS)
     im.paste(mark, (10, 12), mark)
     draw.text((50, 12), "Palnest", font=font(14, bold=True), fill=INK)
-    draw.text((50, 32), "Setup 2.3.0", font=font(10), fill=MUTED)
+    draw.text((50, 32), f"Setup {VERSION}", font=font(10), fill=MUTED)
     save_bmp(im, WIZ / "header.bmp")
 
 
