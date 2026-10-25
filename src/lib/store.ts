@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
+import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import type {
   AppMode,
   InstallTarget,
@@ -2114,36 +2114,45 @@ export const useAppStore = create<Store>()(
     }),
     {
       name: "palnest-v14",
-      storage: createJSONStorage(() => {
+      // Debounced, and serialized only when written: PalServer output can call
+      // set() many times a second, and stringifying the whole state each time
+      // was the main idle cost while a server was running.
+      storage: (() => {
+        type Persisted = StorageValue<unknown>;
         let timer: ReturnType<typeof setTimeout> | undefined;
-        let pending: { name: string; value: string } | null = null;
+        let pending: { name: string; value: Persisted } | null = null;
         const flush = () => {
           if (timer) clearTimeout(timer);
           timer = undefined;
           if (!pending) return;
-          localStorage.setItem(pending.name, pending.value);
+          localStorage.setItem(pending.name, JSON.stringify(pending.value));
           pending = null;
         };
         // Closing the window quits Palnest, so write any debounced change first.
         if (typeof window !== "undefined") window.addEventListener("pagehide", flush);
+        const legacy = ["palnest-v13", "palnest-v12", "palnest-v11", "palnest-v10"];
         return {
-          getItem: (name) =>
-            localStorage.getItem(name) ?? localStorage.getItem("palnest-v13") ?? localStorage.getItem("palnest-v12") ?? localStorage.getItem("palnest-v11") ?? localStorage.getItem("palnest-v10"),
-          setItem: (name, value) => {
+          getItem: (name: string): Persisted | null => {
+            const raw = [name, ...legacy].map((key) => localStorage.getItem(key)).find((v) => v != null);
+            if (!raw) return null;
+            try {
+              return JSON.parse(raw) as Persisted;
+            } catch {
+              return null;
+            }
+          },
+          setItem: (name: string, value: Persisted) => {
             pending = { name, value };
             if (timer) clearTimeout(timer);
-            timer = setTimeout(flush, 280);
+            timer = setTimeout(flush, 500);
           },
-          removeItem: (name) => {
+          removeItem: (name: string) => {
             if (timer) clearTimeout(timer);
             pending = null;
-            localStorage.removeItem(name);
-            localStorage.removeItem("palnest-v13");
-            localStorage.removeItem("palnest-v11");
-            localStorage.removeItem("palnest-v10");
+            for (const key of [name, ...legacy]) localStorage.removeItem(key);
           },
-        };
-      }),
+        } as PersistStorage<any>;
+      })(),
       skipHydration: true,
       onRehydrateStorage: () => (state) => {
         if (!state) {
