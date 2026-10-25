@@ -112,8 +112,9 @@ export function RamLoadBar({ samples }: { samples: MetricSample[] }) {
   const slice = filterRange(samples, "1h");
   const latest = samples[samples.length - 1];
   const pct = latest?.hostRamPct ?? 0;
-  const gb = ramFromPct(pct);
-  const ramVals = slice.map((s) => ramFromPct(s.hostRamPct));
+  const totalGb = latest?.hostRamGb ?? HOST_RAM_GB;
+  const gb = ramFromPct(pct, totalGb);
+  const ramVals = slice.map((s) => ramFromPct(s.hostRamPct, s.hostRamGb ?? totalGb));
   const min = ramVals.length ? Math.min(...ramVals) : 0;
   const avg = ramVals.length ? ramVals.reduce((a, b) => a + b, 0) / ramVals.length : 0;
   const width = Math.min(100, Math.max(3, pct));
@@ -152,7 +153,7 @@ export function RamLoadBar({ samples }: { samples: MetricSample[] }) {
         </div>
         <div className="text-right">
           <dt className="uppercase tracking-widest">Max</dt>
-          <dd className="font-mono tabular-nums text-foreground">{HOST_RAM_GB.toFixed(1)}</dd>
+          <dd className="font-mono tabular-nums text-foreground">{totalGb.toFixed(1)}</dd>
         </div>
       </dl>
     </section>

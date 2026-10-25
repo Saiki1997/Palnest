@@ -379,40 +379,100 @@ function soapMap(location, port, on) {
   });
 }
 
+const cpuSeen = new Map();
+let hostCpuSeen = null;
+
+function hostCpuPct() {
+  const cpus = os.cpus();
+  let idle = 0;
+  let total = 0;
+  for (const c of cpus) {
+    idle += c.times.idle;
+    total += c.times.user + c.times.nice + c.times.sys + c.times.idle + c.times.irq;
+  }
+  const prev = hostCpuSeen;
+  hostCpuSeen = { idle, total };
+  if (!prev || total <= prev.total) return null;
+  return Math.max(0, Math.min(100, (1 - (idle - prev.idle) / (total - prev.total)) * 100));
+}
+
+async function hostStats(dir) {
+  const totalMem = os.totalmem();
+  const stats = {
+    hostCpu: hostCpuPct(),
+    hostRamPct: ((totalMem - os.freemem()) / totalMem) * 100,
+    hostRamGb: totalMem / 1024 ** 3,
+    diskFreeGb: null,
+    diskUsedPct: null,
+  };
+  try {
+    const fsStat = await fs.promises.statfs(dir);
+    const size = fsStat.blocks * fsStat.bsize;
+    const free = fsStat.bavail * fsStat.bsize;
+    if (size > 0) {
+      stats.diskFreeGb = free / 1024 ** 3;
+      stats.diskUsedPct = ((size - free) / size) * 100;
+    }
+  } catch {
+    // Unknown volume; leave disk stats empty.
+  }
+  return stats;
+}
+
+/** Cumulative CPU seconds, working set and thread count for one process. */
+async function processSample(pid) {
+  if (process.platform === "win32") {
+    const { execFile } = await import("node:child_process");
+    const out = await new Promise((resolve) => {
+      execFile(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-Command",
+          `$p = Get-Process -Id ${Number(pid)} -ErrorAction SilentlyContinue; if ($p) { '{0},{1},{2}' -f $p.CPU, $p.WorkingSet64, $p.Threads.Count }`,
+        ],
+        { windowsHide: true },
+        (err, stdout) => resolve(err ? "" : String(stdout)),
+      );
+    });
+    const [cpuSec, rss, threads] = String(out).trim().split(",").map(Number);
+    if (!Number.isFinite(cpuSec)) return null;
+    return { cpuSec, rssBytes: rss || 0, threads: threads || 0 };
+  }
+  const raw = await fs.promises.readFile(`/proc/${pid}/stat`, "utf8");
+  const fields = raw.slice(raw.lastIndexOf(")") + 2).split(" ");
+  const ticks = Number(fields[11]) + Number(fields[12]);
+  return { cpuSec: ticks / 100, rssBytes: Number(fields[21]) * 4096, threads: Number(fields[17]) || 0 };
+}
+
 async function palMetrics(id) {
   const child = pals.get(id);
-  if (!child?.pid || child.killed || child.exitCode != null) return { cpu: 0, ramMb: 0, running: false };
-  if (process.platform === "win32") {
-    try {
-      const { execFile } = await import("node:child_process");
-      const out = await new Promise((resolve) => {
-        execFile(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-Command",
-            `$p = Get-Process -Id ${Number(child.pid)} -ErrorAction SilentlyContinue; if ($p) { '{0},{1}' -f [math]::Round($p.CPU), [math]::Round($p.WorkingSet64/1MB) } else { '0,0' }`,
-          ],
-          { windowsHide: true },
-          (err, stdout) => resolve(err ? "0,0" : String(stdout)),
-        );
-      });
-      const [cpu, ram] = String(out)
-        .trim()
-        .split(",")
-        .map((n) => Number(n) || 0);
-      return { cpu, ramMb: ram, running: true };
-    } catch {
-      return { cpu: 12, ramMb: 0, running: true };
-    }
+  if (!child?.pid || child.killed || child.exitCode != null) {
+    cpuSeen.delete(id);
+    return { cpu: 0, ramMb: 0, running: false };
   }
+  const dir = child.spawnfile && path.isAbsolute(child.spawnfile) ? path.dirname(child.spawnfile) : process.cwd();
+  const host = await hostStats(dir);
+  let sample = null;
   try {
-    const raw = await fs.promises.readFile(`/proc/${child.pid}/stat`, "utf8");
-    const rss = Number(raw.split(" ")[23] || 0) * 4096;
-    return { cpu: 8, ramMb: Math.round(rss / 1024 / 1024) || 400, running: true };
+    sample = await processSample(child.pid);
   } catch {
-    return { cpu: 1, ramMb: 0, running: true };
+    sample = null;
   }
+  if (!sample) return { cpu: 0, ramMb: 0, running: true, ...host };
+  const now = Date.now();
+  const prev = cpuSeen.get(id);
+  cpuSeen.set(id, { cpuSec: sample.cpuSec, at: now });
+  // Percent of the whole machine, like Task Manager.
+  const cpu =
+    prev && now > prev.at ? Math.max(0, ((sample.cpuSec - prev.cpuSec) / ((now - prev.at) / 1000) / os.cpus().length) * 100) : 0;
+  return {
+    cpu: Math.min(100, cpu),
+    ramMb: Math.round(sample.rssBytes / 1024 / 1024),
+    threads: sample.threads,
+    running: true,
+    ...host,
+  };
 }
 
 async function detectAgents() {

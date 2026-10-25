@@ -105,12 +105,18 @@ function claimCode(slot: number) {
 
 export type TunnelAction = "install" | "claim" | "confirm" | "create" | "start" | "stop" | "reset";
 
+/**
+ * `real` is the desktop app: claim links and public addresses only ever come
+ * from the agent's own output (see `parseAgentLine`). Without it, the browser
+ * preview walks the same states with clearly fake demo addresses.
+ */
 export function advanceTunnel(
   tunnel: TunnelState,
   action: TunnelAction,
-  ctx: { name: string; slot: number; port: number; queryPort: number; provider?: TunnelProvider },
+  ctx: { name: string; slot: number; port: number; queryPort: number; provider?: TunnelProvider; real?: boolean },
 ): TunnelState {
   const provider = ctx.provider ?? tunnel.provider;
+  const real = Boolean(ctx.real);
   if (provider === "none" && action !== "reset") {
     return { ...tunnel, lastError: "Pick playit.gg or PortWarp first.", status: "error" };
   }
@@ -121,7 +127,7 @@ export function advanceTunnel(
 
   if (action === "install") {
     const playit = provider === "playit";
-    const code = playit ? claimCode(ctx.slot) : "";
+    const code = playit && !real ? claimCode(ctx.slot) : "";
     return {
       ...idleTunnel(ctx.port, provider),
       provider,
@@ -130,12 +136,15 @@ export function advanceTunnel(
       agentVersion: playit ? PLAYIT_AGENT : PORTWARP_AGENT,
       region: playit ? "global-anycast" : "anycast",
       claimCode: code,
-      claimUrl: playit ? `https://playit.gg/claim/${code}` : "",
+      claimUrl: code ? `https://playit.gg/claim/${code}` : "",
       lastError: "",
     };
   }
 
   if (action === "claim") {
+    if (real) {
+      return { ...tunnel, provider, status: "claim", agentInstalled: true, lastError: "" };
+    }
     const code = claimCode(ctx.slot);
     return {
       ...tunnel,
@@ -154,6 +163,17 @@ export function advanceTunnel(
   }
 
   if (action === "create") {
+    if (real) {
+      return {
+        ...tunnel,
+        provider,
+        status: "offline",
+        agentInstalled: true,
+        tunnelId: `${provider}-${slugHost(ctx.name)}-${ctx.slot}`,
+        localPort: ctx.port,
+        lastError: "",
+      };
+    }
     const allocated = allocateTunnel({ name: ctx.name, slot: ctx.slot, port: ctx.port, queryPort: ctx.queryPort }, provider);
     return {
       ...tunnel,
@@ -172,6 +192,10 @@ export function advanceTunnel(
   if (action === "start") {
     if (!tunnel.agentInstalled) {
       return { ...tunnel, status: "error", lastError: "Install the tunnel agent first." };
+    }
+    if (real) {
+      // The agent starts once PalServer binds; its output fills in the address.
+      return { ...tunnel, provider, status: "online", startedAt: new Date().toISOString(), lastError: "" };
     }
     if (provider === "playit" && tunnel.status === "claim") {
       return { ...tunnel, status: "error", lastError: "Claim the playit agent, then create the Palworld tunnel." };
@@ -206,7 +230,7 @@ export function advanceTunnel(
 
 export function joinIp(instance: Pick<ServerState, "port" | "publicIp" | "tunnel">) {
   if (instance.tunnel.status === "online" && instance.tunnel.game) {
-    return `${instance.tunnel.game.ip}:${instance.tunnel.game.port}`;
+    return `${instance.tunnel.game.ip || instance.tunnel.game.host}:${instance.tunnel.game.port}`;
   }
   if (instance.publicIp) return `${instance.publicIp}:${instance.port}`;
   return `127.0.0.1:${instance.port}`;
@@ -221,7 +245,7 @@ export function joinHost(instance: Pick<ServerState, "port" | "publicIp" | "tunn
 
 export function tunnelLaunchFlags(tunnel: TunnelState): { publicIp: string; publicPort: number | null } {
   if (tunnel.status === "online" && tunnel.game) {
-    return { publicIp: tunnel.game.ip, publicPort: tunnel.game.port };
+    return { publicIp: tunnel.game.ip || tunnel.game.host, publicPort: tunnel.game.port };
   }
   return { publicIp: "", publicPort: null };
 }
@@ -238,4 +262,44 @@ export function tunnelLabel(status: TunnelStatus) {
 
 export function providerMeta(id: TunnelProvider) {
   return TUNNEL_PROVIDERS.find((p) => p.id === id);
+}
+
+export type AgentLineHit = { claimUrl?: string; claimCode?: string; game?: TunnelEndpoint };
+
+const PLAYIT_CLAIM = /https:\/\/playit\.gg\/claim\/([A-Za-z0-9]+)/;
+const HOST_PORT = /\b((?:\d{1,3}\.){3}\d{1,3}|[a-z0-9-]+(?:\.[a-z0-9-]+)+):(\d{2,5})\b/i;
+const IPV4 = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+
+/**
+ * Pull a claim link or a public address out of one chunk of tunnel-agent
+ * output. Only addresses on the provider's own domains count, so a log line
+ * mentioning the local PalServer port is never mistaken for the public one.
+ */
+export function parseAgentLine(provider: TunnelProvider, text: string): AgentLineHit {
+  const hit: AgentLineHit = {};
+  const claim = text.match(PLAYIT_CLAIM);
+  if (provider === "playit" && claim) {
+    hit.claimUrl = claim[0];
+    hit.claimCode = claim[1];
+    return hit;
+  }
+  const domain = provider === "playit" ? /(?:^|\.)(?:ply\.gg|playit\.gg|joinmc\.link)$/i : /portwarp|pwrp/i;
+  const mentions = provider === "playit" ? /ply\.gg|playit/i : /portwarp|pwrp/i;
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(HOST_PORT);
+    if (!m) continue;
+    const host = m[1]!;
+    const port = Number(m[2]);
+    if (!(port > 0 && port < 65536)) continue;
+    if (IPV4.test(host)) {
+      if (/^(?:127|10|192\.168|0)\./.test(host)) continue;
+      if (!mentions.test(line)) continue;
+      hit.game = { host, port, ip: host };
+      return hit;
+    }
+    if (!domain.test(host)) continue;
+    hit.game = { host, port, ip: "" };
+    return hit;
+  }
+  return hit;
 }

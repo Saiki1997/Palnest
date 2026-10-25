@@ -84,7 +84,8 @@ function HomePage() {
   );
   const attention = findings.filter((f) => f.severity !== "info").slice(0, 4);
   const cpu = monitor.latest?.hostCpu ?? 0;
-  const ramGb = ramFromPct(monitor.latest?.hostRamPct ?? 0);
+  const ramTotalGb = monitor.latest?.hostRamGb ?? HOST_RAM_GB;
+  const ramGb = ramFromPct(monitor.latest?.hostRamPct ?? 0, ramTotalGb);
   const enabled = mods.filter((m) => m.enabled);
 
   return (
@@ -216,7 +217,7 @@ function HomePage() {
             <StatCard
               label="RAM usage"
               value={`${ramGb.toFixed(1)} GB`}
-              badge={`/ ${HOST_RAM_GB.toFixed(1)} GB Total`}
+              badge={`/ ${ramTotalGb.toFixed(1)} GB Total`}
               icon={MemoryStick}
               valueClass="text-chart-ram"
             />

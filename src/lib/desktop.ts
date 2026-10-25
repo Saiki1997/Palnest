@@ -3,7 +3,17 @@ import type { AgentScan } from "./agents";
 import { APP_VERSION } from "./version";
 
 export type HostListen = { bound: boolean; transport: "udp" | "tcp" | "none"; simulated?: boolean };
-export type HostMetrics = { cpu: number; ramMb: number; running: boolean };
+export type HostMetrics = {
+  cpu: number;
+  ramMb: number;
+  running: boolean;
+  threads?: number;
+  hostCpu?: number | null;
+  hostRamPct?: number;
+  hostRamGb?: number;
+  diskFreeGb?: number | null;
+  diskUsedPct?: number | null;
+};
 export type HostWrite = { ok: boolean; simulated?: boolean; error?: string; path?: string };
 export type HostSpawn = { ok: boolean; pid?: number; simulated?: boolean; error?: string };
 

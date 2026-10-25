@@ -13,7 +13,7 @@ import {
   queryPortUdpLikely,
   simulatedListenProbe,
 } from "@/lib/listen";
-import { overlayHost } from "@/lib/monitor";
+import { appendSample, liveSample } from "@/lib/monitor";
 import { blameCrash } from "@/lib/crash-blame";
 import { composeEngineIni, mergeFx } from "@/lib/fx";
 import { tweaksToIni } from "@/lib/args";
@@ -32,7 +32,7 @@ import {
   probeDenListen,
 } from "@/lib/runtime";
 import { useAppStore } from "@/lib/store";
-import { joinHost } from "@/lib/tunnels";
+import { joinHost, parseAgentLine } from "@/lib/tunnels";
 
 export function RuntimeBridge() {
   const hydrateReady = useAppStore((s) => s.hydrateReady);
@@ -121,7 +121,42 @@ export function RuntimeBridge() {
     const api = typeof window !== "undefined" ? window.palnestDesktop : undefined;
     if (!api?.onConsole || !captureConsole) return;
     return api.onConsole((ev) => {
-      if (ev?.id && ev.text) pushConsole(ev.id, ev.text.trimEnd(), ev.stream === "err" ? "err" : "out");
+      if (!ev?.id || !ev.text) return;
+      const stream = ev.stream === "err" ? "err" : "out";
+      if (ev.id !== "playit" && ev.id !== "portwarp") {
+        pushConsole(ev.id, ev.text.trimEnd(), stream);
+        return;
+      }
+      // Tunnel agents run per provider, so their output belongs to every world on it.
+      const provider = ev.id;
+      const hit = parseAgentLine(provider, ev.text);
+      for (const inst of fleetOf(useAppStore.getState())) {
+        if (inst.tunnel.provider !== provider) continue;
+        pushConsole(inst.id, `[${provider}] ${ev.text.trimEnd()}`, stream);
+        if (hit.claimUrl && hit.claimUrl !== inst.tunnel.claimUrl) {
+          useAppStore.setState((st) =>
+            patchInstance(st, inst.id, (cur) => ({
+              ...cur,
+              tunnel: { ...cur.tunnel, claimUrl: hit.claimUrl!, claimCode: hit.claimCode ?? "" },
+            })),
+          );
+          pushConsole(inst.id, `[PALNEST] Claim the playit agent: ${hit.claimUrl}`);
+        }
+        const game = hit.game;
+        if (game && (inst.tunnel.game?.host !== game.host || inst.tunnel.game?.port !== game.port)) {
+          useAppStore.setState((st) =>
+            patchInstance(st, inst.id, (cur) => ({
+              ...cur,
+              publicIp: game.ip || game.host,
+              tunnel: { ...cur.tunnel, game },
+            })),
+          );
+          pushConsole(
+            inst.id,
+            `[PALNEST] Public address ${game.host}:${game.port}. Restart ${inst.name} to advertise it in the community list.`,
+          );
+        }
+      }
     });
   }, [captureConsole, pushConsole]);
 
@@ -529,12 +564,18 @@ export function RuntimeBridge() {
             if (live.ok && !live.simulated && live.players.length) {
               patchServer(inst.id, { players: live.players });
             }
+            if (!m.running) return;
             useAppStore.setState((st) => {
-              const samples = [...(st.monitor?.samples ?? [])];
-              const last = samples[samples.length - 1];
-              if (!last?.running) return st;
-              samples[samples.length - 1] = overlayHost(last, m, rest.metrics ?? undefined);
-              return { monitor: { ...st.monitor, samples } };
+              const samples = st.monitor?.samples ?? [];
+              const world = st.worlds.find((w) => w.id === inst.worldId) ?? st.worlds.find((w) => w.active);
+              const sample = liveSample(Date.now(), {
+                host: m,
+                rest: rest.metrics,
+                players: (live.ok && !live.simulated ? live.players : inst.players).filter((p) => p.online).length,
+                worldMb: world?.sizeMb ?? 0,
+                previous: samples[samples.length - 1],
+              });
+              return { monitor: { ...st.monitor, samples: appendSample(samples, sample) } };
             });
           }
         })();

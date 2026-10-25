@@ -6,6 +6,8 @@ import {
   DEFAULT_THRESHOLDS,
   diskForecast,
   downsample,
+  liveSample,
+  stoppedSample,
   evaluateAlerts,
   filterRange,
   parseWorldClock,
@@ -228,4 +230,36 @@ test("settingOn reads REST and RCON flags", () => {
   assert.equal(settingOn(settings, "RESTAPIEnabled"), true);
   assert.equal(settingOn(settings, "RCONEnabled"), false);
   assert.equal(settingOn(undefined, "RESTAPIEnabled"), false);
+});
+
+test("liveSample uses only measured values", () => {
+  const s = liveSample(1000, {
+    host: { cpu: 23.456, ramMb: 7168, running: true, threads: 51, hostCpu: 40, hostRamPct: 61.2, hostRamGb: 32, diskFreeGb: 120.4, diskUsedPct: 55 },
+    rest: { fps: 29.5, frameMs: 33.9, players: 3 },
+    players: 0,
+    worldMb: 300,
+  });
+  assert.equal(s.procCpu, 23.5);
+  assert.equal(s.procRamGb, 7);
+  assert.equal(s.threads, 51);
+  assert.equal(s.hostRamGb, 32);
+  assert.equal(s.fps, 29.5);
+  assert.equal(s.players, 3);
+});
+
+test("liveSample leaves unmeasured values empty instead of guessing", () => {
+  const s = liveSample(1000, { host: { cpu: 0, ramMb: 0, running: true }, players: 2, worldMb: 0 });
+  assert.equal(s.fps, null);
+  assert.equal(s.hostCpu, 0);
+  assert.equal(s.diskFreeGb, 0);
+  assert.equal(s.players, 2);
+});
+
+test("stoppedSample keeps the last host reading", () => {
+  const prev = liveSample(1000, { host: { cpu: 10, ramMb: 1024, running: true, hostCpu: 30, diskFreeGb: 50 }, players: 1, worldMb: 10 });
+  const s = stoppedSample(2000, prev);
+  assert.equal(s.running, false);
+  assert.equal(s.procCpu, 0);
+  assert.equal(s.hostCpu, 30);
+  assert.equal(s.diskFreeGb, 50);
 });
